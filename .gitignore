@@ -1,0 +1,19 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+Datasets/
+processed_z08/
+data/
+agn/
+new_specs/
+test/
+
+Rapport_Gaétane_MAISSA_compressed.pdf
