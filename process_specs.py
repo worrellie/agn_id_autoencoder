@@ -88,8 +88,8 @@ def read_spec(spec_path):
 test_dir = "/home/worrellie/Documents/phd/autoencoder/test"
 test_save_dir = "/home/worrellie/Documents/phd/autoencoder/new_specs"
 
-dir = "/home/worrellie/Documents/phd/autoencoder/Datasets/z08_v3-002"
-save_dir = "/home/worrellie/Documents/phd/autoencoder/processed_z08"
+dir = "/home/worrellie/Documents/phd/autoencoder/Datasets/z09_v3-001"
+save_dir = "/home/worrellie/Documents/phd/autoencoder/processed_z09"
 
 process_files(dir, save_dir)
 

@@ -1,3 +1,6 @@
+# autoencoder with spectral data but not good design
+
+
 import torch
 from torch import nn, optim
 from torchvision import datasets, transforms

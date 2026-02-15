@@ -10,6 +10,46 @@ import numpy as np
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
 
+spec_dir = "/home/worrellie/Documents/phd/autoencoder/Datasets/z08_v3-002/"
+# spec_path = os.path.join(spec_dir, spec_name)
+fluxes = []
+for spec in os.listdir(spec_dir):
+    if spec.endswith("1h_RI.fits"):
+        spec_path = os.path.join(spec_dir, spec)
+        try:
+            with fits.open(spec_path) as hdul:
+
+                flux = hdul[1].data
+                flux = flux.astype(np.float32)
+                flux = torch.from_numpy(flux)
+                fluxes.append(flux)
+
+        except Exception as e:
+            print(f"Error opening spectrum: {spec} ({e})")
+
+fluxes = np.asarray(fluxes)
+fluxes = torch.from_numpy(fluxes)
+print(fluxes.size())
+
+mu = fluxes.mean(dim=0, keepdim=True)
+sigma = fluxes.std(dim=0, keepdim=True)
+
+fluxes_std = (fluxes - mu) / sigma
+
+class SpecDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data):
+        self.data = data
+        
+    def __len__(self):
+        return len(self.data)
+    
+    def __getitem__(self, idx):
+
+        sample = self.data[idx]
+
+        return sample, sample
+
 class SpectraDataset(torch.utils.data.Dataset):
 
     def __init__(self, spec_dir, transform = None, target_transform = None):
@@ -55,7 +95,7 @@ class VarEncoder(nn.Module):
         self.flatten = nn.Flatten()
 
         # define layers
-        self.linear1 = nn.Linear(5742 * 2, 128) # input to first hidden
+        self.linear1 = nn.Linear(4117, 128) # input to first hidden
         self.linear2 = nn.Linear(128, 64)
         self.linear3 = nn.Linear(64, 36)
         self.linear4 = nn.Linear(36, 18)
@@ -99,7 +139,7 @@ class Decoder(nn.Module):
         self.linear2 = nn.Linear(18, 36)
         self.linear3 = nn.Linear(36, 64)
         self.linear4 = nn.Linear(64, 128)
-        self.linear5 = nn.Linear(128, 5742 * 2)
+        self.linear5 = nn.Linear(128, 4117)
 
     def forward(self, z):
 
@@ -110,7 +150,7 @@ class Decoder(nn.Module):
         z = self.linear5(z)
 
         z = torch.sigmoid(z)
-        decoded = z.view(-1, 5742, 2)
+        decoded = z.view(-1, 4117)
 
         return decoded
     
@@ -134,14 +174,9 @@ class Autoencoder(nn.Module):
 ############################################################################
 # main
 
-spec_data = SpectraDataset("/home/worrellie/Documents/phd/autoencoder/new_specs", transform=transforms.Normalize)
+spec_data = SpecDataset(fluxes_std)
 
-loader = torch.utils.data.DataLoader(spec_data, batch_size=5, shuffle=True)
-
-# samples, _ = next(iter(loader))
-# print(samples.size())
-
-# exit()
+loader = torch.utils.data.DataLoader(spec_data, batch_size=64, shuffle=True)
 
 # make instance of autoencoder
 model = Autoencoder()
@@ -165,7 +200,6 @@ for epoch in range(epochs):
         specs = specs.to(device)
 
         reconstructed = model(specs)
-        print(reconstructed)
         # reconstructed = reconstructed.view(-1, 5742, 2) # .view restores original shape
 
         # loss = loss_function(reconstructed, specs)
@@ -200,24 +234,11 @@ reconstructed = model(specs)
 
 spec = specs[0].cpu().detach().numpy()
 recon = reconstructed[0].cpu().detach().numpy()
-
-print(min(spec[:,1]))
-print(max(spec[:,1]))
-
-print(min(spec[:,0]))
-print(max(spec[:,0]))
-
+l = np.linspace(6469.9999, 9339.9193, num=4117)
 
 # plot first spec and reconstruction
-print(min(recon[:,1]))
-print(max(recon[:,1]))
-
-print(min(recon[:,0]))
-print(max(recon[:,0]))
-
-
 fig, ax = plt.subplots()
-ax.plot(spec[:, 0], spec[:, 1], label = 'spec', lw=1)
-ax.plot(recon[:, 0], recon[:, 1], label = ' recon', lw = 1)
+ax.plot(l, spec, label = 'spec', lw=1)
+ax.plot(l, recon, label = ' recon', lw = 1)
 plt.legend()
 plt.show()
