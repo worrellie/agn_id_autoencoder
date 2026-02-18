@@ -200,8 +200,6 @@ class LoadData():
 
     def __init__(self, std, spec_dir ="/home/worrellie/Documents/phd/autoencoder/merged_spectra_gal",
                  agn_dir="/home/worrellie/Documents/phd/autoencoder/agn/merged_spectra_agn"):
-        self.MU = 0
-        self.SIGMA = 0
         self.std = std
         self.spec_dir = spec_dir
         self.agn_dir = agn_dir
