@@ -45,6 +45,19 @@ class VAEAutoencoder(nn.Module):
             self.encoder_layers.append(
                 nn.Linear(c['in'], c['out'], )
             )
+
+    # ###### this is cool- remember for future
+    # def _get_flattened_size(self, input_size):
+        
+    #     with torch.no_grad(): # do not update weights
+            
+    #         dummy_x = torch.zeros(1, 1, input_size)
+    #         for l in self.encoder_layers:
+    #             dummy_x = l(dummy_x) # updates the dummy shape based on the encoder layers
+            
+    #         return dummy_x.numel(), dummy_x.shape[1], dummy_x.shape[2]
+    # ######
+        
         
         # add decoder layers
         for c in reversed(config):
@@ -87,7 +100,9 @@ class VAEAutoencoder(nn.Module):
             z = torch.relu(l(z))
             # print(z.shape)
 
-        x_hat = torch.relu(self.decoder_to_output(z))
+        # x_hat = torch.relu(self.decoder_to_output(z))
+        # x_hat = torch.tanh(self.decoder_to_output(z))
+        x_hat = self.decoder_to_output(z)
         # print(x_hat.shape)
 
         return x_hat, mu, logvar
@@ -183,23 +198,27 @@ class CNNAutoencoder(nn.Module):
 
 class LoadData():
 
-    def __init__(self,):
+    def __init__(self, std, spec_dir ="/home/worrellie/Documents/phd/autoencoder/merged_spectra_gal",
+                 agn_dir="/home/worrellie/Documents/phd/autoencoder/agn/merged_spectra_agn"):
         self.MU = 0
         self.SIGMA = 0
+        self.std = std
+        self.spec_dir = spec_dir
+        self.agn_dir = agn_dir
 
-    def load_galaxies(self,spec_dir ="/home/worrellie/Documents/phd/autoencoder/test_gal"):
+    def load_galaxies(self,):
 
         fluxes = []
         i=0
-        for spec in os.listdir(spec_dir):
+        for spec in os.listdir(self.spec_dir):
             i= i+1
-            spec_path = os.path.join(spec_dir, spec)
+            spec_path = os.path.join(self.spec_dir, spec)
             try:
                 with fits.open(spec_path) as hdul:
 
                     data = hdul[1].data
                     flux = data['flux']
-                    print(flux)
+                    # print(flux)
                     l = data['lambda']
                     self.l = l
                     flux = flux.astype(np.float32)
@@ -221,26 +240,37 @@ class LoadData():
         f_train, f_test = train_test_split(fluxes)
         f_train, f_valid = train_test_split(f_train, test_size = 0.1)
 
-        self.MU = float(f_train.mean())   # MU and SIGMA of training only
-        self.SIGMA = float(f_train.std()) # otherwise have data leakage
-
-        plt.figure()
-        plt.plot(l, f_train[1])
-        plt.title('pre-standardized')
+        # plt.figure()
+        # plt.plot(l, f_train[1])
+        # plt.title('pre-standardized example')
         # plt.show()
 
-        ####
-        f_train = (f_train - self.MU) / self.SIGMA # standardized fluxes of TRAINING ONLY
-        f_test = (f_test - self.MU) / self.SIGMA
-        f_valid = (f_valid - self.MU) / self.SIGMA
-        ####
+        # standardize
+        if self.std == 'zscore':
 
-        plt.figure()
-        plt.plot(l, f_train[1])
-        plt.title('standardized')
-        plt.show()
-        exit()
-        
+            self.MU = float(f_train.mean())   # MU and SIGMA of training only
+            self.SIGMA = float(f_train.std()) # otherwise have data leakage
+
+            f_train = (f_train - self.MU) / self.SIGMA # standardized fluxes of TRAINING ONLY
+            f_test = (f_test - self.MU) / self.SIGMA
+            f_valid = (f_valid - self.MU) / self.SIGMA
+
+        elif self.std == 'minmax': # normalization
+
+            self.f_min = min(f_train)
+            self.f_max = max(f_train)
+
+            f_train = (f_train - self.f_min)/ (self.f_max - self.f_min)
+            f_test = (f_test - self.f_min)/ (self.f_max - self.f_min)
+            f_valid = (f_valid - self.f_min)/ (self.f_max - self.f_min)
+
+
+        # plt.figure()
+        # plt.plot(l, f_train[1])
+        # plt.title('standardized example')
+        # plt.show()
+        # exit()
+
         f_train = np.asarray(f_train)
         f_test = np.asarray(f_test)
         f_valid = np.asarray(f_valid)
@@ -249,15 +279,16 @@ class LoadData():
         f_valid = torch.from_numpy(f_valid)
         f_test = torch.from_numpy(f_test)
 
+
         return f_train, f_valid, f_test
 
 
-    def load_agn(self, agn_dir="/home/worrellie/Documents/phd/autoencoder/agn/merged_spectra_agn"):
+    def load_agn(self,):
 
         fluxes_agn = []
 
-        for spec in os.listdir(agn_dir):
-            spec_path = os.path.join(agn_dir, spec)
+        for spec in os.listdir(self.agn_dir):
+            spec_path = os.path.join(self.agn_dir, spec)
             if "z0.9" in spec_path:
                 try:
                     with fits.open(spec_path) as hdul:

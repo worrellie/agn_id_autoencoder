@@ -35,16 +35,14 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=T
 
 # make model
 
-LATENT_SIZE = 10
+LATENT_SIZE = 128
 INPUT_SIZE = len(train_fluxes[1])
 
 test_config = [
     {'in': 5000,   'out': 2000, },
     {'in': 2000,  'out': 1000, },
     {'in': 1000,  'out': 500, },
-    {'in': 500,  'out': 128, },
-    {'in': 128,  'out': 64, },
-    {'in': 64,  'out': 32, },
+    {'in': 500,  'out' : 256, },
 ]
 
 model = mods.VAEAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE)
@@ -61,44 +59,14 @@ model, train_losses, valid_losses = train_ae(EPOCHS, train_loader, valid_loader,
 
 # funcs.plot_loss(train_losses, valid_losses)
 
-# example_idxs = funcs.get_example_specs(train_losses)
+#######
 
-# predictions
-model.to(device)
-model.eval()
-output = {'recon':[],'og':[], 'loss':[]}
-for x, _ in train_dataset:
-    
-    # x = x.tolist()
-    # plt.figure()
-    # plt.plot(data_loader.l, x)
-    # plt.title('quoi??')
-    # plt.show()
-    # x = torch.tensor(x)
-
-    x = x.to(device)
-    x_hat, mu, logvar = model(x)
-
-    # x_hat= x_hat.detach().cpu().tolist()
-    # plt.figure()
-    # plt.plot(data_loader.l, x_hat)
-    # plt.show()
-    # x_hat = torch.tensor(x_hat)
-
-    loss = funcs.loss_calc(x_hat, x, mu, logvar).detach().cpu()
-
-    # out = [x_hat.detach().cpu().tolist(), x.detach().cpu().tolist(), loss.item()]
-    # print(np.array(out).shape())
-    # output.append([x_hat.detach().cpu().tolist(), x.detach().cpu().tolist(), loss.item()])
-    output['recon'].append(x_hat.detach().cpu().tolist())
-    output['og'].append(x.detach().cpu().tolist())
-    output['loss'].append(loss.tolist())
-
-# idxs = funcs.get_example_specs(output['loss'])
 MU = data_loader.MU
 SIGMA = data_loader.SIGMA
 l = data_loader.l
-funcs.plot_example_specs(output, MU, SIGMA, l)
+
+funcs.plot_examples(train_loader, model, MU, SIGMA, l)
+
 
 # # test
 

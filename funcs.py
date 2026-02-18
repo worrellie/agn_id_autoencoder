@@ -14,9 +14,9 @@ import math
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def loss_calc(x_hat, x, mu, logvar):
+def loss_calc(x_hat, x, mu, logvar, red = 'mean'):
 
-    recon_loss = nn.MSELoss()
+    recon_loss = nn.MSELoss(reduction = red)
 
     loss = recon_loss(x_hat, x) + (- 0.5*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
 
@@ -24,6 +24,8 @@ def loss_calc(x_hat, x, mu, logvar):
 
 
 def train_ae(epochs, train_loader, valid_loader, model, optimizer, verbose = True, *args):
+
+    print('training model...')
 
     model.to(device)
 
@@ -45,7 +47,9 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, verbose = Tru
 
             x_hat, mu, logvar = model(x) # batch prediction
 
-            loss = loss_calc(x_hat, x, mu, logvar)
+            loss = loss_calc(x_hat, x, mu, logvar,)
+            # print(loss)
+            # print('------')
 
             optimizer.zero_grad()
 
@@ -55,32 +59,35 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, verbose = Tru
 
             optimizer.step()
 
-        epoch_avg_loss = train_loss / len(train_loader.dataset) # average loss per sample 
+        epoch_avg_loss = train_loss / len(train_loader) # average loss per sample 
         train_losses.append(epoch_avg_loss) # losses for each epoch
 
         if verbose:
             print(f'training: epoch {epoch+1}/{epochs}, loss: {epoch_avg_loss:.10f}')
 
         model.eval()
+        if valid_loader is not None:
 
-        with torch.no_grad():
+            with torch.no_grad():
 
-            for x, _ in valid_loader:
+                for x, _ in valid_loader:
 
-                x = x.to(device)
+                    x = x.to(device)
 
-                x_hat, mu, logvar = model(x)
+                    x_hat, mu, logvar = model(x)
 
-                loss = loss_calc(x_hat, x, mu, logvar)
+                    loss = loss_calc(x_hat, x, mu, logvar)
+
+                    
+                    valid_loss += loss.item()
                 
-                valid_loss += loss.item()
-            
-            epoch_avg_valid_loss = valid_loss / len(valid_loader.dataset)
-            valid_losses.append(epoch_avg_valid_loss)
+                epoch_avg_valid_loss = valid_loss / len(valid_loader)
+                valid_losses.append(epoch_avg_valid_loss)
 
-        if verbose:
-            print(f'valid: epoch {epoch+1}/{epochs}, loss: {epoch_avg_valid_loss:.10f}')
-
+            if verbose:
+                print(f'valid: epoch {epoch+1}/{epochs}, loss: {epoch_avg_valid_loss:.10f}')
+        
+    print('training finished')
 
     return model, train_losses, valid_losses
 
@@ -123,34 +130,100 @@ def test_agn(loader, model):
     print(np.mean(losses))
 
 
-def unstandardize(spec, MU, SIGMA):
+def _get_example_specs(loader, model):
 
-    new_spec = (np.asarray(spec) * SIGMA) + MU
+    print('predicting...')
+    losses = []
+    with torch.no_grad():
+        for x, _ in loader:
+            # print(x.size())
+            x = x.to(device)
+            x_hat, mu, logvar = model(x)
+            loss = loss_calc(x_hat, x, mu, logvar, red='none').detach().cpu()
+            for l in loss:
+                mean_loss = np.mean(np.array(l))
+                losses.append(mean_loss)
+            # print(len(loss))
+            # print(loss)
+            # print(loss.item())
+            # losses.extend(loss)
+    # print(len(losses))
 
-    return new_spec
+    to_find = {
+        "min": np.min(losses),
+        "max": np.max(losses),
+        "25th": np.percentile(losses, 25),
+        "mean": np.mean(losses),
+        "75th": np.percentile(losses, 75)
+    }
 
+    print('getting min, max, mean and quartiles of losses...')
 
-def _get_example_specs(losses):
+    idxs = []
+    for key, value in to_find.items():
+        # print(len(np.abs(losses - value)))
+        idx = (np.abs(losses - value)).argmin()
+        idxs.append(idx)
+    # print(idxs)
+    
+    # print(to_find)
 
-    min_i = losses.index(min(losses))
+    return idxs
 
-    max_i = losses.index(max(losses))
+def _predict_examples(dataset, indices, model):
 
-    mean_i = losses.index(np.median(losses))
+    output = {'recon' : [],
+              'original' : [],
+              'loss' : []}
 
-    q25_i = losses.index(np.quantile(losses, 0.25))
+    print('predicting min, max, mean and quartiles...')
 
-    q75_i = losses.index(np.quantile(losses, 0.75))
+    with torch.no_grad():
+        for i in indices:
+            x = dataset[i][0].to(device)
+            # print(type(x))
+            # print(x.shape)
+            x= x.unsqueeze(0)
+            # note: need batch dimension for model
+            x_hat, mu, logvar = model(x)
+            # print(x_hat.shape)
+            loss = loss_calc(x_hat, x, mu, logvar, red='none')
+            for l in loss:
+                l = l.detach().cpu()
+                mean_loss = np.mean(np.array(l))
+            x = x.squeeze(0)
+            x_hat = x_hat.squeeze(0) # add then remove batch dimension
+            x_hat = x_hat.detach().cpu()
+            output['recon'].append(x_hat.tolist())
+            output['original'].append(x.tolist())
+            output['loss'].append(mean_loss)
 
-    indices = [min_i, q25_i, mean_i, q75_i, max_i,]
-    # print(indices)
-    # print([losses[i] for i in indices])
+    # print(len(output['recon']))
+    # print(len(output['original']))
+    # print(output['loss'])
 
-    return indices
+    return output
 
-def plot_example_specs(output, MU, SIGMA, l):
+def unstandardize(reconstructed, std, n1, n2):
 
-    indices = _get_example_specs(output['loss'])
+    # n1 is MU or MIN
+    # n2 is SIGMA or MAX
+
+    if std == 'zscore':
+        recon = (np.array(reconstructed) * n2) + n1
+    elif std == 'minmax':
+        n = n2 - n1
+        # print(type(n))
+        # print(type(n1))
+        # print(type(n2))
+        # print(type(reconstructed))
+        recon = (np.array(reconstructed) * n) + n1
+
+    return list(recon)
+
+def _plot_example_specs(output, l, indices, std, n1, n2):
+
+    print('plotting...')
 
     fig = plt.figure(figsize=(20, 7))
     # gs = fig.add_gridspec(2, 6)
@@ -175,24 +248,36 @@ def plot_example_specs(output, MU, SIGMA, l):
     # ax5 = fig.add_subplot(gs[1, 4:6])
     # ax5.set_title("Bottom Right")
 
-    axes = [ax1, ax3, ax4, ax5, ax2]
+    axes = [ax1, ax2, ax3, ax4, ax5]
 
     plt.tight_layout()
 
 
-    for i, ax in zip(indices, axes):
+    for i, ax in enumerate(axes):
         # print(i, ax)
 
         reconstructed = output['recon'][i]
-        # reconstructed = unstandardize(reconstructed, MU, SIGMA)
-        og = output['og'][i]
+        # print(reconstructed)
+        # exit()
+        reconstructed = unstandardize(reconstructed, std, n1, n2)
+        og = output['original'][i]
         # og = unstandardize(og, MU, SIGMA)
         loss = output['loss'][i]
         ax.plot(l, og, color='black')
-        # ax.plot(l, reconstructed, color = 'red')
+        ax.plot(l, reconstructed, color = 'red')
         ax.set_title(loss)
 
     plt.show()
 
+    return
 
-    return 
+def plot_examples(loader, model, l, std, n1, n2):
+
+    indices = _get_example_specs(loader, model)
+
+    data = loader.dataset
+
+    output = _predict_examples(data, indices, model)
+
+    _plot_example_specs(output, l, indices, std, n1, n2)
+
