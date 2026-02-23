@@ -14,20 +14,21 @@ import math
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def loss_calc(x_hat, x, mu, logvar, beta = 1, red = 'mean'):
+def _loss_calc(x_hat, x, mu = None, logvar = None, beta = 0, red = 'mean'):
 
     mse = nn.MSELoss(reduction = red)
     recon_loss = mse(x_hat, x)
 
-    kl_sum = (- 0.5*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
-    if red == 'mean':
-        kl_div = kl_sum / x.shape[0]
+    if mu is not None and logvar is not None: # (if is VAE)
+        kl_sum = (- 0.5*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
+        if red == 'mean':
+            kl_div = kl_sum / x.shape[0]
+        else:
+            kl_div = kl_sum
     else:
-        kl_div = kl_sum
+        torch.tensor(0.0).to(x.device)
 
-    weighted_kl = beta * kl_div
-
-    loss = recon_loss + weighted_kl
+    loss = recon_loss + (beta * kl_div)
 
     return recon_loss, kl_div, loss
 
@@ -64,7 +65,7 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 1 , ve
 
             x_hat, mu, logvar = model(x) # batch prediction
 
-            mse, kl, loss = loss_calc(x_hat, x, mu, logvar, beta = beta, red = 'mean') # 'mean' gives loss per sample for batch
+            mse, kl, loss = _loss_calc(x_hat, x, mu = mu, logvar = logvar, beta = beta, red = 'mean') # 'mean' gives loss per sample for batch
 
             optimizer.zero_grad()
 
@@ -109,7 +110,7 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 1 , ve
 
                     x_hat, mu, logvar = model(x)
 
-                    mse, kl, loss = loss_calc(x_hat, x, mu, logvar, beta = beta, red = 'mean') # 'mean' gives loss per sample for batch
+                    mse, kl, loss = _loss_calc(x_hat, x, mu = mu, logvar = logvar, beta = beta, red = 'mean') # 'mean' gives loss per sample for batch
 
                     valid_mse += mse.item() * x.size(0) # reconstruction loss
                     valid_kl += kl.item() * x.size(0) # kl divergence
@@ -195,7 +196,7 @@ def _get_example_specs(loader, model):
             # print(x.size())
             x = x.to(device)
             x_hat, mu, logvar = model(x)
-            loss = loss_calc(x_hat, x, mu, logvar, red='none').detach().cpu()
+            loss = _loss_calc(x_hat, x, mu, logvar, red='none').detach().cpu()
             for l in loss:
                 mean_loss = np.mean(np.array(l))
                 losses.append(mean_loss)
@@ -243,7 +244,7 @@ def _predict_examples(dataset, indices, model):
             # note: need batch dimension for model
             x_hat, mu, logvar = model(x)
             # print(x_hat.shape)
-            loss = loss_calc(x_hat, x, mu, logvar, red='none')
+            loss = _loss_calc(x_hat, x, mu, logvar, red='none')
             for l in loss:
                 l = l.detach().cpu()
                 mean_loss = np.mean(np.array(l))
