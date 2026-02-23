@@ -14,32 +14,49 @@ import math
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-def loss_calc(x_hat, x, mu, logvar, red = 'mean'):
+def loss_calc(x_hat, x, mu, logvar, beta = 1, red = 'mean'):
 
-    recon_loss = nn.MSELoss(reduction = red)
+    mse = nn.MSELoss(reduction = red)
+    recon_loss = mse(x_hat, x)
 
-    loss = recon_loss(x_hat, x) + (- 0.5*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
+    kl_sum = (- 0.5*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
+    if red == 'mean':
+        kl_div = kl_sum / x.shape[0]
+    else:
+        kl_div = kl_sum
 
-    return loss
+    weighted_kl = beta * kl_div
+
+    loss = recon_loss + weighted_kl
+
+    return recon_loss, kl_div, loss
 
 
-def train_ae(epochs, train_loader, valid_loader, model, optimizer, verbose = True, *args):
+def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 1 , verbose = True, *args):
 
     print('training model...')
 
     model.to(device)
 
-    recon_loss = nn.MSELoss()
-
+    # recon_loss = nn.MSELoss()
 
     train_losses = []
+    train_mses = []
+    train_kls = []
     valid_losses = []
+    valid_mses = []
+    valid_kls = []
 
     for epoch in range(epochs):
 
         model.train()
         train_loss = 0
+        train_mse = 0
+        train_kl = 0
         valid_loss = 0
+        valid_mse = 0
+        valid_kl = 0
+
 
         for x, _ in train_loader:
 
@@ -47,21 +64,39 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, verbose = Tru
 
             x_hat, mu, logvar = model(x) # batch prediction
 
-            loss = loss_calc(x_hat, x, mu, logvar, red = 'mean') #
+            mse, kl, loss = loss_calc(x_hat, x, mu, logvar, beta = beta, red = 'mean') # 'mean' gives loss per sample for batch
 
             optimizer.zero_grad()
 
             loss.backward()
 
-            train_loss += loss.item() # cumulative loss of batch??
+            # print(type(loss))
+            # print(loss)
+
+            train_mse += mse.item() * x.size(0) # reconstruction loss
+            train_kl += kl.item() * x.size(0) # kl divergence
+            # train_w_kls += w_kl.item() / x.size(0) # weighted kl divergence
+
+            train_loss += loss.item() * x.size(0) # total loss
 
             optimizer.step()
 
-        epoch_avg_loss = train_loss / len(train_loader) # average loss per sample 
+        train_samples = len(train_loader.dataset)
+
+        epoch_avg_mse = train_mse / train_samples
+        train_mses.append(epoch_avg_mse)
+        epoch_avg_kl = train_kl / train_samples
+        train_kls.append(epoch_avg_kl)
+        # epoch_avg_w_kl = train_w_kl / train_samples
+        # train_w_kls.append(epoch_avg_w_kls)
+
+        epoch_avg_loss = train_loss / train_samples # average loss per sample 
         train_losses.append(epoch_avg_loss) # losses for each epoch
 
         if verbose:
-            print(f'training: epoch {epoch+1}/{epochs}, loss: {epoch_avg_loss:.10f}')
+            print('-------------------------------------------')
+            print(f'training: epoch {epoch+1}/{epochs}, total loss: {epoch_avg_loss:.10f}')
+            
 
         model.eval()
         if valid_loader is not None:
@@ -74,19 +109,43 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, verbose = Tru
 
                     x_hat, mu, logvar = model(x)
 
-                    loss = loss_calc(x_hat, x, mu, logvar)
+                    mse, kl, loss = loss_calc(x_hat, x, mu, logvar, beta = beta, red = 'mean') # 'mean' gives loss per sample for batch
 
-                    valid_loss += loss.item()
+                    valid_mse += mse.item() * x.size(0) # reconstruction loss
+                    valid_kl += kl.item() * x.size(0) # kl divergence
+                    # valid_w_kls += w_kl.item() / x.size(0) # weighted kl divergence
+
+                    valid_loss += loss.item() * x.size(0)
+
+                valid_samples = len(valid_loader.dataset)
+
+                epoch_avg_valid_mse = valid_mse / valid_samples
+                valid_mses.append(epoch_avg_valid_mse)
+                epoch_avg_valid_kl = valid_kl / valid_samples
+                valid_kls.append(epoch_avg_valid_kl)
+                # epoch_avg_valid_w_kl = valid_w_kl / valid_samples
+                # valid_w_kls.append(epoch_avg_valid_w_kls)
                 
-                epoch_avg_valid_loss = valid_loss / len(valid_loader)
+                epoch_avg_valid_loss = valid_loss / valid_samples
                 valid_losses.append(epoch_avg_valid_loss)
 
             if verbose:
-                print(f'valid: epoch {epoch+1}/{epochs}, loss: {epoch_avg_valid_loss:.10f}')
+                print(f'valid: epoch {epoch+1}/{epochs}, total loss: {epoch_avg_valid_loss:.10f}')
         
     print('training finished')
 
-    return model, train_losses, valid_losses
+    model_losses = {
+        'beta': beta,
+        'train_total': train_losses,
+        'train_mse': train_mses,
+        'train_kl_raw': train_kls,
+        'valid_total': valid_losses,
+        'valid_mse': valid_mses,
+        'valid_kl_raw': valid_kls,
+
+    }
+
+    return model, model_losses
 
 def plot_loss(train_loss, valid_loss):
 

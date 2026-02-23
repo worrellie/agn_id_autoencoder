@@ -84,9 +84,10 @@ print(model)
 
 optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
 
-EPOCHS = 50
+EPOCHS = 5
+beta = 1 # kl weighting
 
-model, train_losses, valid_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer,  verbose = True, )
+model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=beta, verbose = True, )
 
 funcs.plot_loss(train_losses, valid_losses)
 
