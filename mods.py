@@ -30,6 +30,55 @@ class SpecDataset(torch.utils.data.Dataset):
 
 ####### autoencoders ########
 
+class StandardAutoencoder(nn.Module):
+
+    def __init__(self, config, input_size, latent_size):
+        super(StandardAutoencoder, self).__init__()
+
+        self.encoder_layers = nn.ModuleList()
+        self.decoder_layers = nn.ModuleList()
+
+        self.input_to_encoder = nn.Linear(input_size, config[0]['in'])
+
+        # add encoder layers
+        for c in config:
+            self.encoder_layers.append(
+                nn.Linear(c['in'], c['out'], )
+            )
+
+        self.encoder_to_latent= nn.Linear(config[-1]['out'], latent_size)
+
+
+        # add decoder layers
+        for c in reversed(config):
+            self.decoder_layers.append(
+                nn.Linear(c['out'], c['in'], )
+            )
+        
+        self.decoder_from_latent = nn.Linear(latent_size, config[-1]['out'])
+
+        self.decoder_to_output = nn.Linear(config[0]['in'], input_size)
+
+    def forward(self, x):
+
+        x = torch.relu(self.input_to_encoder(x))
+
+        for l in self.encoder_layers:
+            x = torch.relu(l(x))
+
+        z = torch.relu(self.encoder_to_latent(x))
+
+        z = torch.relu(self.decoder_from_latent(z))
+
+        for l in self.decoder_layers:
+            z = torch.relu(l(z))
+
+        x_hat = self.decoder_to_output(z)
+
+        return x_hat, None, None
+
+
+
 class VAEAutoencoder(nn.Module):
 
     def __init__(self, config, input_size, latent_size):

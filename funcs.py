@@ -26,14 +26,14 @@ def _loss_calc(x_hat, x, mu = None, logvar = None, beta = 0, red = 'mean'):
         else:
             kl_div = kl_sum
     else:
-        torch.tensor(0.0).to(x.device)
+        kl_div = torch.tensor(0.0).to(x.device)
 
     loss = recon_loss + (beta * kl_div)
 
     return recon_loss, kl_div, loss
 
 
-def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 1 , verbose = True, *args):
+def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 0 , verbose = True, *args):
 
     print('training model...')
 

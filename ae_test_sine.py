@@ -33,7 +33,7 @@ def generate_sine_data(num_samples, seq_len):
 test_data, l = generate_sine_data(1000, 64)
 
 f_train, f_test = train_test_split(test_data)
-print(type(f_train))
+# print(type(f_train))
 
 # # z score standardise
 # MU = float(f_train.mean())
@@ -62,7 +62,7 @@ test_dataset = SpecDataset(test_fluxes)
 train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=True)
 
-print(train_loader.dataset.data)
+# print(train_loader.dataset.data)
 
 
 INPUT_SIZE = len(train_fluxes[1])
@@ -76,7 +76,9 @@ test_config = [
 
 LATENT_SIZE = 128
 
-model = mods.VAEAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE)
+# model = mods.VAEAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE)
+model = mods.StandardAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE)
+
 # model.to(device)
 print(model)
 
@@ -85,7 +87,7 @@ print(model)
 optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
 
 EPOCHS = 5
-beta = 1 # kl weighting
+beta = 0 # kl weighting
 
 model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=beta, verbose = True, )
 
