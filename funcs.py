@@ -47,15 +47,13 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, verbose = Tru
 
             x_hat, mu, logvar = model(x) # batch prediction
 
-            loss = loss_calc(x_hat, x, mu, logvar,)
-            # print(loss)
-            # print('------')
+            loss = loss_calc(x_hat, x, mu, logvar, red = 'mean') #
 
             optimizer.zero_grad()
 
             loss.backward()
 
-            train_loss += loss.item() # cumulative loss
+            train_loss += loss.item() # cumulative loss of batch??
 
             optimizer.step()
 
@@ -78,7 +76,6 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, verbose = Tru
 
                     loss = loss_calc(x_hat, x, mu, logvar)
 
-                    
                     valid_loss += loss.item()
                 
                 epoch_avg_valid_loss = valid_loss / len(valid_loader)
