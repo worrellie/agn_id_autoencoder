@@ -87,7 +87,7 @@ class VAEAutoencoder(nn.Module):
         self.encoder_layers = nn.ModuleList()
         self.decoder_layers = nn.ModuleList()
 
-        self.input_to_encoder = nn.LazyLinear(config[0]['in'])
+        self.input_to_encoder = nn.Linear(input_size, config[0]['in'])
 
         # add encoder layers
         for c in config:
@@ -115,44 +115,32 @@ class VAEAutoencoder(nn.Module):
             )
         
         # add latent layers
-        self.encoder_to_latent_mean = nn.LazyLinear(latent_size)
-        self.encoder_to_latent_logvar = nn.LazyLinear(latent_size)
+        self.encoder_to_latent_mean = nn.Linear(config[-1]['out'], latent_size)
+        self.encoder_to_latent_logvar = nn.Linear(config[-1]['out'], latent_size)
         
-        self.decoder_from_latent = nn.LazyLinear(config[-1]['out'])
+        self.decoder_from_latent = nn.Linear(latent_size, config[-1]['out'])
 
-        self.decoder_to_output = nn.LazyLinear(input_size)
+        self.decoder_to_output = nn.Linear(config[0]['in'], input_size)
 
 
     def forward(self, x):
         
-        # print(x.shape)
 
         x = torch.relu(self.input_to_encoder(x))
-        # print(x.shape)
-
         for l in self.encoder_layers:
             x = torch.relu(l(x))
-            # print(x.shape)
 
         mu = torch.relu(self.encoder_to_latent_mean(x))
         logvar = torch.relu(self.encoder_to_latent_logvar(x))
-        # print(mu.shape)
-        # print(logvar.shape)
-
         epsilon = torch.randn_like(logvar)
         z = mu + logvar*epsilon # latent of VAE
-        # print(z.shape)
 
         z = torch.relu(self.decoder_from_latent(z))
 
         for l in self.decoder_layers:
             z = torch.relu(l(z))
-            # print(z.shape)
 
-        # x_hat = torch.relu(self.decoder_to_output(z))
-        # x_hat = torch.tanh(self.decoder_to_output(z))
         x_hat = self.decoder_to_output(z)
-        # print(x_hat.shape)
 
         return x_hat, mu, logvar
 

@@ -76,8 +76,8 @@ test_config = [
 
 LATENT_SIZE = 128
 
-# model = mods.VAEAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE)
-model = mods.StandardAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE)
+model = mods.VAEAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE)
+# model = mods.StandardAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE)
 
 # model.to(device)
 print(model)
@@ -92,6 +92,6 @@ beta = 0 # kl weighting
 model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=beta, verbose = True, )
 
 
-funcs.plot_loss(model_losses)
+# funcs.plot_loss(model_losses)
 
 # funcs.plot_examples(train_loader, model, l, 'minmax', f_min, f_max)
