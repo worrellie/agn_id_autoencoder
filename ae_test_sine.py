@@ -89,6 +89,7 @@ beta = 1 # kl weighting
 
 model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=beta, verbose = True, )
 
-funcs.plot_loss(train_losses, valid_losses)
 
-funcs.plot_examples(train_loader, model, l, 'minmax', f_min, f_max)
+funcs.plot_loss(model_losses)
+
+# funcs.plot_examples(train_loader, model, l, 'minmax', f_min, f_max)

@@ -96,7 +96,7 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 1 , ve
 
         if verbose:
             print('-------------------------------------------')
-            print(f'training: epoch {epoch+1}/{epochs}, total loss: {epoch_avg_loss:.10f}')
+            print(f'training: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_loss:.10f},\nmse: {epoch_avg_mse:.10f},\nkl: {epoch_avg_kl:e}')
             
 
         model.eval()
@@ -131,7 +131,7 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 1 , ve
                 valid_losses.append(epoch_avg_valid_loss)
 
             if verbose:
-                print(f'valid: epoch {epoch+1}/{epochs}, total loss: {epoch_avg_valid_loss:.10f}')
+                print(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
         
     print('training finished')
 
@@ -148,15 +148,49 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 1 , ve
 
     return model, model_losses
 
-def plot_loss(train_loss, valid_loss):
+def plot_loss(model_losses):
+
+    train_loss = model_losses['train_total']
+    valid_loss = model_losses['valid_total']
+    train_mse = model_losses['train_mse']
+    valid_mse = model_losses['valid_mse']
+    train_kl = model_losses['train_kl_raw']
+    valid_kl = model_losses['valid_kl_raw']
+
+    epochs = range(1, len(train_loss) + 1)
 
     plt.style.use('fivethirtyeight')
-    plt.figure(figsize=(8, 5))
-    plt.plot(train_loss, label='Train')
-    plt.plot(valid_loss, label='Valid')
-    plt.xlabel('Iterations')
-    plt.ylabel('Loss')
-    plt.legend()
+    fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+
+    ax1.plot(epochs, train_loss, label='Train Total', alpha=0.8)
+    ax1.plot(epochs, valid_loss, label='Valid Total', alpha=0.8, linestyle='--')
+    ax1.set_title(f'Total Loss (Beta={model_losses["beta"]})')
+    ax1.set_xlabel('Epochs')
+    ax1.set_ylabel('Loss Value')
+    ax1.legend()
+
+    ax2.plot(epochs, train_mse, label='Train MSE', color='tab:blue')
+    ax2.plot(epochs, valid_mse, label='Valid MSE', color='tab:blue', linestyle='--')
+    
+    if any(k > 0 for k in train_kl):
+        ax2_kl = ax2.twinx()
+        ax2_kl.plot(epochs, train_kl, label='Train KL (raw)', color='tab:red', alpha=0.6)
+        ax2_kl.plot(epochs, valid_kl, label='Valid KL (raw)', color='tab:red', alpha=0.6, linestyle='--')
+        ax2_kl.set_ylabel('KL Divergence', color='tab:red')
+        ax2_kl.tick_params(axis='y', labelcolor='tab:red')
+        
+        lines, labels = ax2.get_legend_handles_labels()
+        lines2, labels2 = ax2_kl.get_legend_handles_labels()
+        ax2.legend(lines + lines2, labels + labels2, loc='upper right')
+    else:
+        ax2.legend()
+
+    ax2.set_title('Reconstruction (MSE) vs Regularization (KL)')
+    ax2.set_xlabel('Epochs')
+    ax2.set_ylabel('MSE Loss', color='tab:blue')
+    ax2.tick_params(axis='y', labelcolor='tab:blue')
+
+    plt.tight_layout()
     plt.show()
 
 def test_agn(loader, model):
