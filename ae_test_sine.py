@@ -64,6 +64,8 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=T
 
 # print(train_loader.dataset.data)
 
+TEST_NAME = "standard_sine_zscore_tanh"
+
 SCALING = 'zscore'
 
 INPUT_SIZE = len(train_fluxes[1])
@@ -76,7 +78,7 @@ CONFIG = [
 ]
 
 LATENT_SIZE = 128
-ACTIVATION_FUNCTION = 'ReLU'
+ACTIVATION_FUNCTION = 'Tanh'
 
 EPOCHS = 5
 
@@ -86,6 +88,7 @@ LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-8
 
 test_params = {
+    'test_name': TEST_NAME,
     'scaling' : SCALING,
     'config' : CONFIG,
     'latent_size' : LATENT_SIZE,
@@ -95,6 +98,9 @@ test_params = {
     'lr' : LEARNING_RATE,
     'weight_decay' : WEIGHT_DECAY 
 }
+
+
+funcs.save_test_params(test_params, TEST_NAME, test=False)
 
 model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
 # model = mods.VAEAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE)
@@ -108,6 +114,6 @@ optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT
 
 model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=BETA, verbose = True, )
 
-funcs.plot_loss(model_losses)
+funcs.plot_loss(model_losses, test_params['test_name'], test=False)
 
-funcs.plot_examples(train_loader, model, l, test_params, MU, SIGMA)
+funcs.plot_examples(train_loader, model, l, test_params, MU, SIGMA, test = False)

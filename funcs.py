@@ -3,7 +3,7 @@ import torch
 from torch import nn, optim
 from torchvision import datasets, transforms
 import matplotlib.pyplot as plt
-import os
+import pathlib as path
 from astropy.io import fits
 from astropy.wcs import WCS
 import numpy as np
@@ -11,6 +11,7 @@ from sklearn.model_selection import train_test_split
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
 import math
+import pickle as pkl
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -148,7 +149,7 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 0 , ve
 
     return model, model_losses
 
-def plot_loss(model_losses):
+def plot_loss(model_losses, test_name, test= False):
 
     train_loss = model_losses['train_total']
     valid_loss = model_losses['valid_total']
@@ -191,7 +192,12 @@ def plot_loss(model_losses):
     ax2.tick_params(axis='y', labelcolor='tab:blue')
 
     plt.tight_layout()
+    if not test:
+        pth = path.Path(test_name, f"{test_name}_loss.png")
+        plt.savefig(pth)
+    
     plt.show()
+
 
 def test_agn(loader, model):
 
@@ -413,7 +419,7 @@ def _draw_spec_pair(ax_fit, ax_res, output, i, l, std, n1, n2):
 
 ###########################
 
-def plot_examples(loader, model, l, test_params, n1, n2):
+def plot_examples(loader, model, l, test_params, n1, n2, test=False):
 
     indices = _get_example_specs(loader, model)
 
@@ -427,7 +433,22 @@ def plot_examples(loader, model, l, test_params, n1, n2):
     fig = _plot_example_specs(output, l, indices, std, n1, n2)
 
     fig.suptitle(f"{test_params['scaling']}, latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['epochs']}")
+
+    if not test:
+        pth = path.Path(test_params['test_name'], f"{test_params['test_name']}.png")
+        plt.savefig(pth)
+    
     plt.show()
 
+def save_test_params(test_dict, test_name, test=False):
+
+    if test:
+        return
+
+    path.Path(test_name).mkdir(parents=False, exist_ok = False)
+    path_name = path.Path(test_name, f"{test_name}_params.pkl")
+
+    with open(path_name, 'wb') as p:
+        pkl.dump(test_dict, p)
 
 
