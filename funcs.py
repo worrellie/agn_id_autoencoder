@@ -346,9 +346,10 @@ def _plot_example_specs(output, l, indices, std, n1, n2):
 def _draw_spec_pair(ax_fit, ax_res, output, i, l, std, n1, n2):
     
     recon = unstandardize(output['recon'][i], std, n1, n2)
-    og = output['original'][i]
+    og = unstandardize(output['original'][i], std, n1, n2)
     
-    # resid = [x - y for x,y in zip(output['original'][i], output['recon'][i])]
+    
+    resid = [x - y for x,y in zip(output['original'][i], output['recon'][i])]
     # r2 =[np.pow(x, 2) for x in resid]
     # mean_r2 = np.mean(r2)
 
@@ -359,7 +360,7 @@ def _draw_spec_pair(ax_fit, ax_res, output, i, l, std, n1, n2):
     
 
     # Residual Panel
-    ax_res.scatter(l, resid, color='gray')
+    ax_res.scatter(l, resid, color='gray') # residuals of standardized data
     ax_res.axhline(0, color='black', lw=0.8, ls=':')
 
 

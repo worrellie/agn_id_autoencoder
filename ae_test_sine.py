@@ -25,7 +25,7 @@ def generate_sine_data(num_samples, seq_len):
         # Random phase and slight amplitude shift
         phase = np.random.uniform(0, 2 * np.pi)
         amp = np.random.uniform(0.8, 1.2)
-        sample = amp * np.sin(x + phase)
+        sample = (amp*10) * np.sin(x + phase)
         data.append(sample)
     return np.array(data, dtype =  np.float32), x
 
@@ -76,7 +76,7 @@ CONFIG = [
 ]
 
 LATENT_SIZE = 500
-ACTIVATION_FUNCTION = 'Tanh'
+ACTIVATION_FUNCTION = 'ReLU'
 
 EPOCHS = 5
 
