@@ -29,8 +29,8 @@ def generate_sine_data(num_samples, seq_len):
         data.append(sample)
     return np.array(data, dtype =  np.float32), x
 
-# Creates 1000 samples of 1D vectors with 64 points each
-test_data, l = generate_sine_data(1000, 64)
+# Creates 1000 samples of 1D vectors with 70 points each
+test_data, l = generate_sine_data(1000, 70)
 
 f_train, f_test = train_test_split(test_data)
 # print(type(f_train))
@@ -59,8 +59,8 @@ test_fluxes = f_test
 train_dataset = SpecDataset(train_fluxes)
 test_dataset = SpecDataset(test_fluxes)
 
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=True)
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=False)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=False)
 
 # print(train_loader.dataset.data)
 
@@ -73,11 +73,9 @@ INPUT_SIZE = len(train_fluxes[1])
 CONFIG = [
     {'in': 5000,   'out': 2000, },
     {'in': 2000,  'out': 1000, },
-    {'in': 1000,  'out': 500, },
-    {'in': 500,  'out' : 256, },
 ]
 
-LATENT_SIZE = 128
+LATENT_SIZE = 500
 ACTIVATION_FUNCTION = 'Tanh'
 
 EPOCHS = 5
@@ -99,8 +97,8 @@ test_params = {
     'weight_decay' : WEIGHT_DECAY 
 }
 
+funcs.save_test_params(test_params, TEST_NAME, test=True)
 
-funcs.save_test_params(test_params, TEST_NAME, test=False)
 
 model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
 # model = mods.VAEAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE)
@@ -114,6 +112,6 @@ optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT
 
 model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=BETA, verbose = True, )
 
-funcs.plot_loss(model_losses, test_params['test_name'], test=False)
+funcs.plot_loss(model_losses, test_params['test_name'], test=True)
 
-funcs.plot_examples(train_loader, model, l, test_params, MU, SIGMA, test = False)
+funcs.plot_examples(train_loader, model, l, test_params, MU, SIGMA, test = True)
