@@ -32,8 +32,10 @@ class SpecDataset(torch.utils.data.Dataset):
 
 class StandardAutoencoder(nn.Module):
 
-    def __init__(self, config, input_size, latent_size):
+    def __init__(self, config, input_size, latent_size, activation = 'ReLU'):
         super(StandardAutoencoder, self).__init__()
+
+        self.act_func = getattr(nn, activation)() # make instance of desired activation function
 
         self.encoder_layers = nn.ModuleList()
         self.decoder_layers = nn.ModuleList()
@@ -61,28 +63,35 @@ class StandardAutoencoder(nn.Module):
 
     def forward(self, x):
 
-        x = torch.relu(self.input_to_encoder(x))
+        # x = torch.relu(self.input_to_encoder(x))
+        x = self.act_func(self.input_to_encoder(x))
 
         for l in self.encoder_layers:
-            x = torch.relu(l(x))
+            # x = torch.relu(l(x))
+            x = self.act_func(l(x))
 
-        z = torch.relu(self.encoder_to_latent(x))
+        # z = torch.relu(self.encoder_to_latent(x))
+        z = self.act_func(self.encoder_to_latent(x))
 
-        z = torch.relu(self.decoder_from_latent(z))
+        # z = torch.relu(self.decoder_from_latent(z))
+        z = self.act_func(self.decoder_from_latent(z))
+
 
         for l in self.decoder_layers:
-            z = torch.relu(l(z))
+            # z = torch.relu(l(z))
+            z = self.act_func(l(z))
 
         x_hat = self.decoder_to_output(z)
 
         return x_hat, None, None
 
 
-
 class VAEAutoencoder(nn.Module):
 
-    def __init__(self, config, input_size, latent_size):
+    def __init__(self, config, input_size, latent_size, activation = 'ReLU'):
         super(VAEAutoencoder, self).__init__()
+
+        self.act_func = getattr(nn, activation)() # make instance of desired activation function
 
         self.encoder_layers = nn.ModuleList()
         self.decoder_layers = nn.ModuleList()
@@ -125,20 +134,28 @@ class VAEAutoencoder(nn.Module):
 
     def forward(self, x):
         
+        # x = torch.relu(self.input_to_encoder(x))
+        x = self.act_func(self.input_to_encoder(x))
 
-        x = torch.relu(self.input_to_encoder(x))
         for l in self.encoder_layers:
-            x = torch.relu(l(x))
+            # x = torch.relu(l(x))
+            x = self.act_func(l(x))
 
-        mu = torch.relu(self.encoder_to_latent_mean(x))
-        logvar = torch.relu(self.encoder_to_latent_logvar(x))
-        epsilon = torch.randn_like(logvar)
-        z = mu + logvar*epsilon # latent of VAE
+        # mu = torch.relu(self.encoder_to_latent_mean(x))
+        mu = self.encoder_to_latent_mean(x)
+        # logvar = torch.relu(self.encoder_to_latent_logvar(x))
+        logvar = self.encoder_to_latent_logvar(x)
+        
+        std = torch.exp(0.5 * logvar)
+        epsilon = torch.randn_like(std)
+        z = mu + std*epsilon # latent of VAE
 
-        z = torch.relu(self.decoder_from_latent(z))
+        # z = torch.relu(self.decoder_from_latent(z))
+        z = self.act_func(self.decoder_from_latent(z))
 
         for l in self.decoder_layers:
-            z = torch.relu(l(z))
+            # z = torch.relu(l(z))
+            z = self.act_func(l(z))
 
         x_hat = self.decoder_to_output(z)
 
