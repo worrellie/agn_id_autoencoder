@@ -35,17 +35,17 @@ test_data, l = generate_sine_data(1000, 64)
 f_train, f_test = train_test_split(test_data)
 # print(type(f_train))
 
-# # z score standardise
-# MU = float(f_train.mean())
-# SIGMA = float(f_train.std())
-# f_train = (f_train - MU) / SIGMA
-# f_test = (f_test - MU) / SIGMA
+# z score standardise
+MU = float(f_train.mean())
+SIGMA = float(f_train.std())
+f_train = (f_train - MU) / SIGMA
+f_test = (f_test - MU) / SIGMA
 
-# min-max (normalization)
-f_min = np.min(f_train)
-f_max = np.max(f_train)
-f_train = (f_train - f_min)/(f_max - f_min)
-f_test = (f_test - f_min)/(f_max - f_min)
+# # min-max (normalization)
+# f_min = np.min(f_train)
+# f_max = np.max(f_train)
+# f_train = (f_train - f_min)/(f_max - f_min)
+# f_test = (f_test - f_min)/(f_max - f_min)
 
 f_train = np.asarray(f_train)
 f_test = np.asarray(f_test)
@@ -64,10 +64,11 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=T
 
 # print(train_loader.dataset.data)
 
+SCALING = 'zscore'
 
 INPUT_SIZE = len(train_fluxes[1])
 
-test_config = [
+CONFIG = [
     {'in': 5000,   'out': 2000, },
     {'in': 2000,  'out': 1000, },
     {'in': 1000,  'out': 500, },
@@ -75,22 +76,38 @@ test_config = [
 ]
 
 LATENT_SIZE = 128
+ACTIVATION_FUNCTION = 'ReLU'
 
-model = mods.VAEAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE)
-# model = mods.StandardAutoencoder(test_config, INPUT_SIZE, LATENT_SIZE, activation = 'Tanh')
+EPOCHS = 5
+
+BETA = 0 # kl weighting
+
+LEARNING_RATE = 1e-3
+WEIGHT_DECAY = 1e-8
+
+test_params = {
+    'scaling' : SCALING,
+    'config' : CONFIG,
+    'latent_size' : LATENT_SIZE,
+    'activation_function' : ACTIVATION_FUNCTION,
+    'epochs' : EPOCHS,
+    'beta' : BETA,
+    'lr' : LEARNING_RATE,
+    'weight_decay' : WEIGHT_DECAY 
+}
+
+model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
+# model = mods.VAEAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE)
 
 # model.to(device)
 print(model)
 
 # train
 
-optimizer = optim.Adam(model.parameters(), lr=1e-3, weight_decay=1e-8)
+optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-EPOCHS = 5
-beta = 0 # kl weighting
-
-model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=beta, verbose = True, )
+model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=BETA, verbose = True, )
 
 funcs.plot_loss(model_losses)
 
-# funcs.plot_examples(train_loader, model, l, 'minmax', f_min, f_max)
+funcs.plot_examples(train_loader, model, l, test_params, MU, SIGMA)

@@ -230,7 +230,8 @@ def _get_example_specs(loader, model):
             # print(x.size())
             x = x.to(device)
             x_hat, mu, logvar = model(x)
-            loss = _loss_calc(x_hat, x, mu, logvar, red='none').detach().cpu()
+            loss, mse, kl = _loss_calc(x_hat, x, mu, logvar, red='none')
+            loss = loss.detach().cpu()
             for l in loss:
                 mean_loss = np.mean(np.array(l))
                 losses.append(mean_loss)
@@ -278,7 +279,7 @@ def _predict_examples(dataset, indices, model):
             # note: need batch dimension for model
             x_hat, mu, logvar = model(x)
             # print(x_hat.shape)
-            loss = _loss_calc(x_hat, x, mu, logvar, red='none')
+            loss, mse, kl = _loss_calc(x_hat, x, mu, logvar, red='none')
             for l in loss:
                 l = l.detach().cpu()
                 mean_loss = np.mean(np.array(l))
@@ -312,57 +313,107 @@ def unstandardize(reconstructed, std, n1, n2):
 
     return list(recon)
 
-def _plot_example_specs(output, l, indices, std, n1, n2):
+# def _plot_example_specsA(output, l, indices, std, n1, n2):
 
-    print('plotting...')
+#     print('plotting...')
 
-    fig = plt.figure(figsize=(20, 7))
-    # gs = fig.add_gridspec(2, 6)
+#     fig = plt.figure(figsize=(20, 7))
+#     # gs = fig.add_gridspec(2, 6)
     
-    # ax1 = fig.add_subplot(gs[0, 0:3])
-    ax1 = plt.subplot2grid((2, 6), (0, 1), colspan=2)
-    # ax1.set_title("Top Left Plot")
+#     # ax1 = fig.add_subplot(gs[0, 0:3])
+#     ax1 = plt.subplot2grid((2, 6), (0, 1), colspan=2)
+#     # ax1.set_title("Top Left Plot")
 
-    # ax2 = fig.add_subplot(gs[0, 3:6])
-    ax2 = plt.subplot2grid((2, 6), (0, 3), colspan=2)
-    # ax2.set_title("Top Right Plot")
+#     # ax2 = fig.add_subplot(gs[0, 3:6])
+#     ax2 = plt.subplot2grid((2, 6), (0, 3), colspan=2)
+#     # ax2.set_title("Top Right Plot")
 
-    # ax3 = fig.add_subplot(gs[1, 0:2])
-    ax3 = plt.subplot2grid((2, 6), (1, 0), colspan=2)
-    # ax3.set_title("Bottom Left")
+#     # ax3 = fig.add_subplot(gs[1, 0:2])
+#     ax3 = plt.subplot2grid((2, 6), (1, 0), colspan=2)
+#     # ax3.set_title("Bottom Left")
 
-    ax4 = plt.subplot2grid((2, 6), (1, 2), colspan=2)
-    # ax4 = fig.add_subplot(gs[1, 2:4])
-    # ax4.set_title("Bottom Middle")
+#     ax4 = plt.subplot2grid((2, 6), (1, 2), colspan=2)
+#     # ax4 = fig.add_subplot(gs[1, 2:4])
+#     # ax4.set_title("Bottom Middle")
 
-    ax5 = plt.subplot2grid((2, 6), (1, 4), colspan=2)
-    # ax5 = fig.add_subplot(gs[1, 4:6])
-    # ax5.set_title("Bottom Right")
+#     ax5 = plt.subplot2grid((2, 6), (1, 4), colspan=2)
+#     # ax5 = fig.add_subplot(gs[1, 4:6])
+#     # ax5.set_title("Bottom Right")
 
-    axes = [ax1, ax2, ax3, ax4, ax5]
+#     axes = [ax1, ax2, ax3, ax4, ax5]
+
+#     plt.tight_layout()
+
+
+#     for i, ax in enumerate(axes):
+#         # print(i, ax)
+
+#         reconstructed = output['recon'][i]
+#         # print(reconstructed)
+#         # exit()
+#         reconstructed = unstandardize(reconstructed, std, n1, n2)
+#         og = output['original'][i]
+#         # og = unstandardize(og, MU, SIGMA)
+#         loss = output['loss'][i]
+#         ax.plot(l, og, color='black')
+#         ax.plot(l, reconstructed, color = 'red')
+#         ax.set_title(loss)
+
+#     plt.show()
+
+#     return
+
+###########################
+
+def _plot_example_specs(output, l, indices, std, n1, n2):
+    fig = plt.figure(figsize=(20, 10))
+    
+    
+    # We use 6 columns to allow 3-over-2 centering
+    # 4 rows: [Fit 1, Res 1, Fit 2, Res 2] - we handle vertical pairs manually
+    gs = fig.add_gridspec(4, 6, height_ratios=[3, 1, 3, 1], hspace=0.4, wspace=0.4)
+
+    # --- TOP ROW (3 Plots) ---
+    # Column spans: 0-2, 2-4, 4-6
+    for i in range(3):
+        # Fit at row 0, Res at row 1
+        ax_fit = fig.add_subplot(gs[0, 2*i:2*i+2])
+        ax_res = fig.add_subplot(gs[1, 2*i:2*i+2], sharex=ax_fit)
+        
+        _draw_spec_pair(ax_fit, ax_res, output, i, l, std, n1, n2)
+
+    # --- BOTTOM ROW (2 Plots) ---
+    # Column spans: 0-3, 3-6 (Centering them)
+    for i in range(2):
+        idx = i + 3 # Accessing samples 4 and 5 in your output
+        # Fit at row 2, Res at row 3
+        ax_fit = fig.add_subplot(gs[2, 3*i:3*i+3])
+        ax_res = fig.add_subplot(gs[3, 3*i:3*i+3], sharex=ax_fit)
+        
+        _draw_spec_pair(ax_fit, ax_res, output, idx, l, std, n1, n2)
 
     plt.tight_layout()
+    # plt.show()
 
+    return fig
 
-    for i, ax in enumerate(axes):
-        # print(i, ax)
+def _draw_spec_pair(ax_fit, ax_res, output, i, l, std, n1, n2):
+    """Helper to keep the plotting logic clean"""
+    recon = unstandardize(output['recon'][i], std, n1, n2)
+    og = output['original'][i]
+    
+    # Fit Panel
+    ax_fit.plot(l, og, color='black', alpha=0.7)
+    ax_fit.plot(l, recon, color='red', linewidth=1)
+    ax_fit.set_title(f"Loss: {output['loss'][i]:.5f}")
+    
+    # Residual Panel
+    ax_res.scatter(l, [x-y for x,y in zip(og, recon)], color='gray')
+    ax_res.axhline(0, color='black', lw=0.8, ls=':')
 
-        reconstructed = output['recon'][i]
-        # print(reconstructed)
-        # exit()
-        reconstructed = unstandardize(reconstructed, std, n1, n2)
-        og = output['original'][i]
-        # og = unstandardize(og, MU, SIGMA)
-        loss = output['loss'][i]
-        ax.plot(l, og, color='black')
-        ax.plot(l, reconstructed, color = 'red')
-        ax.set_title(loss)
+###########################
 
-    plt.show()
-
-    return
-
-def plot_examples(loader, model, l, std, n1, n2):
+def plot_examples(loader, model, l, test_params, n1, n2):
 
     indices = _get_example_specs(loader, model)
 
@@ -370,5 +421,13 @@ def plot_examples(loader, model, l, std, n1, n2):
 
     output = _predict_examples(data, indices, model)
 
-    _plot_example_specs(output, l, indices, std, n1, n2)
+    # _plot_example_specsA(output, l, indices, std, n1, n2)
+
+    std = test_params["scaling"]
+    fig = _plot_example_specs(output, l, indices, std, n1, n2)
+
+    fig.suptitle(f"{test_params['scaling']}, latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['epochs']}")
+    plt.show()
+
+
 
