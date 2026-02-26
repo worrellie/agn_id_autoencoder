@@ -12,6 +12,8 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 import math
 import pickle as pkl
+# from ignite.engine import Engine, Events
+# from ignite.handlers import ModelCheckpoint
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
@@ -58,7 +60,6 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stoppin
         valid_loss = 0
         valid_mse = 0
         valid_kl = 0
-
 
         for x, _ in train_loader:
 
@@ -133,13 +134,13 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stoppin
 
             if verbose:
                 print(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
-            
+
             if early_stopping is not None:
-                early_stopping.check_early_stop(epoch_avg_valid_loss)
+                early_stopping.check_early_stop(epoch_avg_valid_loss, model, epoch)
 
                 if early_stopping.stop_training:
                     print('---------------------------------')
-                    print(f'Early Stopping: eapoch {epoch}')
+                    print(f'Early Stopping: epoch {epoch}')
                     print('---------------------------------')
                     break
 

@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
 import math
+import pathlib as path
 
 import funcs
 import mods
@@ -365,7 +366,7 @@ class LoadData():
 
 class CustomEarlyStopping:
 
-    def __init__(self, patience = 5, delta = 0, verbose = False):
+    def __init__(self, test_name, patience = 5, delta = 0, test = False, verbose = False):
 
         self.patience = patience
         self.delta = delta
@@ -373,14 +374,24 @@ class CustomEarlyStopping:
         self.best_loss = None
         self.no_improve_count = 0
         self.stop_training = False
+        self.test = test
+        self.test_name = test_name
 
+    def save_model(self, model, test_name, epoch):
+        
+        save_path = path.Path(test_name, f"{test_name}_{self.patience}_{self.delta}.pt") # overwrite is default
+
+        torch.save(model.state_dict(), save_path)
     
-    def check_early_stop(self, validation_loss):
+    def check_early_stop(self, validation_loss, model, epoch):
 
         if self.best_loss is None or validation_loss < self.best_loss - self.delta:
             # if starting or if new validation loss is better than current best loss
             # set best loss as new validaton loss and reset count of no improvement
+            # and save best model
             self.best_loss = validation_loss
+            if not self.test:
+                self.save_model(model, self.test_name, epoch)
             self.no_improve_count = 0
         else:
             # if new validation loss is not better, increase count of no improvement
