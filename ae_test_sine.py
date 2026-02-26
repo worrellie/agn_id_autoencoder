@@ -78,7 +78,7 @@ CONFIG = [
 LATENT_SIZE = 500
 ACTIVATION_FUNCTION = 'ReLU'
 
-EPOCHS = 5
+EPOCHS = 50
 
 BETA = 1e-4 # kl weighting
 
@@ -97,7 +97,10 @@ test_params = {
     'weight_decay' : WEIGHT_DECAY
 }
 
-funcs.save_test_params(test_params, TEST_NAME, test=True)
+
+testing = False
+
+funcs.save_test_params(test_params, TEST_NAME, test=testing)
 
 
 model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
@@ -106,12 +109,26 @@ model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = A
 # model.to(device)
 print(model)
 
+
+early_stopping = mods.CustomEarlyStopping(TEST_NAME, patience = 5, delta = 0, test = testing, verbose = True)
+
 # train
 
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=BETA, verbose = True, )
+model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = True, )
 
-funcs.plot_loss(model_losses, test_params['test_name'], test=True)
+funcs.plot_loss(model_losses, test_params['test_name'], test=testing)
 
-funcs.plot_examples(train_loader, model, l, test_params, MU, SIGMA, test = True)
+funcs.plot_examples(train_loader, model, l, test_params, MU, SIGMA, test = testing)
+
+
+
+# load best model
+
+# loaded_model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
+# loaded_model.load_state_dict(torch.load("/home/worrellie/Documents/phd/autoencoder/standard_sine_zscore_tanh/standard_sine_zscore_tanh_5_0.pt", weights_only=True))
+# loaded_model.eval()
+
+# pred = loaded_model(f_test)
+# print(pred)
