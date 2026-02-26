@@ -78,7 +78,7 @@ CONFIG = [
 LATENT_SIZE = 500
 ACTIVATION_FUNCTION = 'ReLU'
 
-EPOCHS = 5
+EPOCHS = 50
 
 BETA = 0 # kl weighting
 
@@ -106,11 +106,14 @@ model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = A
 # model.to(device)
 print(model)
 
+
+early_stopping = mods.CustomEarlyStopping(patience = 5, delta = 0, verbose = True)
+
 # train
 
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=BETA, verbose = True, )
+model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = True, )
 
 funcs.plot_loss(model_losses, test_params['test_name'], test=True)
 

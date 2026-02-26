@@ -362,3 +362,31 @@ class LoadData():
         f_agn = torch.from_numpy(f_agn)
 
         return f_agn
+
+class CustomEarlyStopping:
+
+    def __init__(self, patience = 5, delta = 0, verbose = False):
+
+        self.patience = patience
+        self.delta = delta
+        self.verbose = verbose
+        self.best_loss = None
+        self.no_improve_count = 0
+        self.stop_training = False
+
+    
+    def check_early_stop(self, validation_loss):
+
+        if self.best_loss is None or validation_loss < self.best_loss - self.delta:
+            # if starting or if new validation loss is better than current best loss
+            # set best loss as new validaton loss and reset count of no improvement
+            self.best_loss = validation_loss
+            self.no_improve_count = 0
+        else:
+            # if new validation loss is not better, increase count of no improvement
+            self.no_improve_count += 1
+            if self.no_improve_count >= self.patience:
+                # no improve count reaches patience, stop
+                self.stop_training = True
+                if self.verbose:
+                    print('Stopping Early')

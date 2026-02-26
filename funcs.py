@@ -34,7 +34,7 @@ def _loss_calc(x_hat, x, mu = None, logvar = None, beta = 0, red = 'mean'):
     return recon_loss, kl_div, loss
 
 
-def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 0 , verbose = True, *args):
+def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stopping = None, beta = 0 , verbose = True, *args):
 
     print('training model...')
 
@@ -133,6 +133,16 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, beta = 0 , ve
 
             if verbose:
                 print(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
+            
+            if early_stopping is not None:
+                early_stopping.check_early_stop(epoch_avg_valid_loss)
+
+                if early_stopping.stop_training:
+                    print('---------------------------------')
+                    print(f'Early Stopping: eapoch {epoch}')
+                    print('---------------------------------')
+                    break
+
         
     print('training finished')
 
