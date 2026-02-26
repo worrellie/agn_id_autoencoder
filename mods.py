@@ -250,7 +250,7 @@ class CNNAutoencoder(nn.Module):
 
         return x_hat, mu, logvar
 
-class LoadData():
+class LoadData:
 
     def __init__(self, std, spec_dir ="/home/worrellie/Documents/phd/autoencoder/merged_spectra_gal",
                  agn_dir="/home/worrellie/Documents/phd/autoencoder/agn/merged_spectra_agn"):

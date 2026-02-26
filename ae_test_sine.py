@@ -25,7 +25,7 @@ def generate_sine_data(num_samples, seq_len):
         # Random phase and slight amplitude shift
         phase = np.random.uniform(0, 2 * np.pi)
         amp = np.random.uniform(0.8, 1.2)
-        sample = (amp*10) * np.sin(x + phase)
+        sample = (amp) * np.sin(x + phase)
         data.append(sample)
     return np.array(data, dtype =  np.float32), x
 
@@ -80,7 +80,7 @@ ACTIVATION_FUNCTION = 'ReLU'
 
 EPOCHS = 5
 
-BETA = 0 # kl weighting
+BETA = 1e-4 # kl weighting
 
 LEARNING_RATE = 1e-3
 WEIGHT_DECAY = 1e-8
@@ -94,14 +94,14 @@ test_params = {
     'epochs' : EPOCHS,
     'beta' : BETA,
     'lr' : LEARNING_RATE,
-    'weight_decay' : WEIGHT_DECAY 
+    'weight_decay' : WEIGHT_DECAY
 }
 
 funcs.save_test_params(test_params, TEST_NAME, test=True)
 
 
 model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
-# model = mods.VAEAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE)
+# model = mods.VAEAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
 
 # model.to(device)
 print(model)
