@@ -253,13 +253,14 @@ class CNNAutoencoder(nn.Module):
 
 class LoadData:
 
-    def __init__(self, std, spec_dir ="/home/worrellie/Documents/phd/autoencoder/merged_spectra_gal",
+    def __init__(self, scaler, spec_dir ="/home/worrellie/Documents/phd/autoencoder/merged_spectra_gal",
                  agn_dir="/home/worrellie/Documents/phd/autoencoder/agn/merged_spectra_agn"):
-        self.std = std
+        
         self.spec_dir = spec_dir
         self.agn_dir = agn_dir
+        self.scaler = scaler
 
-    def load_galaxies(self,):
+    def load_raw(self,):
 
         fluxes = []
         i=0
@@ -293,76 +294,55 @@ class LoadData:
         f_train, f_test = train_test_split(fluxes)
         f_train, f_valid = train_test_split(f_train, test_size = 0.1)
 
-        # plt.figure()
-        # plt.plot(l, f_train[1])
-        # plt.title('pre-standardized example')
-        # plt.show()
-
-        # standardize
-        if self.std == 'zscore':
-
-            self.MU = float(f_train.mean())   # MU and SIGMA of training only
-            self.SIGMA = float(f_train.std()) # otherwise have data leakage
-
-            f_train = (f_train - self.MU) / self.SIGMA # standardized fluxes of TRAINING ONLY
-            f_test = (f_test - self.MU) / self.SIGMA
-            f_valid = (f_valid - self.MU) / self.SIGMA
-
-        elif self.std == 'minmax': # normalization
-
-            self.f_min = min(f_train)
-            self.f_max = max(f_train)
-
-            f_train = (f_train - self.f_min)/ (self.f_max - self.f_min)
-            f_test = (f_test - self.f_min)/ (self.f_max - self.f_min)
-            f_valid = (f_valid - self.f_min)/ (self.f_max - self.f_min)
-
-
-        # plt.figure()
-        # plt.plot(l, f_train[1])
-        # plt.title('standardized example')
-        # plt.show()
-        # exit()
-
-        f_train = np.asarray(f_train)
-        f_test = np.asarray(f_test)
-        f_valid = np.asarray(f_valid)
-
-        f_train = torch.from_numpy(f_train)
-        f_valid = torch.from_numpy(f_valid)
-        f_test = torch.from_numpy(f_test)
-
-
         return f_train, f_valid, f_test
 
+    def scale_raw(self, f_train, f_valid, f_test):
+        
+        f_train = np.asarray(f_train)
+        f_valid = np.asarray(f_valid)
+        f_test = np.asarray(f_test)
 
-    def load_agn(self,):
+        self.scaler = self.scaler.fit(f_train)
 
-        fluxes_agn = []
+        scaled_train = self.scaler.transform(f_train)
+        scaled_valid = self.scaler.transform(f_valid)
+        scaled_test = self.scaler.transform(f_test)
 
-        for spec in os.listdir(self.agn_dir):
-            spec_path = os.path.join(self.agn_dir, spec)
-            if "z0.9" in spec_path:
-                try:
-                    with fits.open(spec_path) as hdul:
-                        data = hdul[1].data
-                        flux = data['flux']
-                        flux = flux.astype(np.float32)
-                        flux = torch.from_numpy(flux)
-                        fluxes_agn.append(flux)
+        # convert to pytorch tensor
 
-                except Exception as e:
-                    print(f"Error opening spectrum: {spec} ({e})")
+        scaled_train = torch.from_numpy(scaled_train)
+        scaled_valid = torch.from_numpy(scaled_valid)
+        scaled_test = torch.from_numpy(scaled_test)
 
-        fluxes_agn = np.asarray(fluxes_agn)
+        return scaled_train, scaled_valid, scaled_test
 
-        fluxes_agn_std = (fluxes_agn - self.MU) / self.SIGMA # standardized fluxes
+    # def load_agn(self,):
 
-        f_agn = np.asarray(fluxes_agn_std)
+    #     fluxes_agn = []
 
-        f_agn = torch.from_numpy(f_agn)
+    #     for spec in os.listdir(self.agn_dir):
+    #         spec_path = os.path.join(self.agn_dir, spec)
+    #         if "z0.9" in spec_path:
+    #             try:
+    #                 with fits.open(spec_path) as hdul:
+    #                     data = hdul[1].data
+    #                     flux = data['flux']
+    #                     flux = flux.astype(np.float32)
+    #                     flux = torch.from_numpy(flux)
+    #                     fluxes_agn.append(flux)
 
-        return f_agn
+    #             except Exception as e:
+    #                 print(f"Error opening spectrum: {spec} ({e})")
+
+    #     fluxes_agn = np.asarray(fluxes_agn)
+
+    #     fluxes_agn_std = (fluxes_agn - self.MU) / self.SIGMA # standardized fluxes
+
+    #     f_agn = np.asarray(fluxes_agn_std)
+
+    #     f_agn = torch.from_numpy(f_agn)
+
+    #     return f_agn
 
 class CustomEarlyStopping:
 

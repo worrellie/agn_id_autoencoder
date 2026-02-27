@@ -10,6 +10,7 @@ from sklearn.model_selection import train_test_split
 import torch.nn.functional as F
 from torch.distributions.normal import Normal
 import math
+from sklearn.preprocessing import StandardScaler
 
 import funcs
 from funcs import train_ae
@@ -36,10 +37,18 @@ f_train, f_test = train_test_split(test_data)
 # print(type(f_train))
 
 # z score standardise
-MU = float(f_train.mean())
-SIGMA = float(f_train.std())
-f_train = (f_train - MU) / SIGMA
-f_test = (f_test - MU) / SIGMA
+scaler = StandardScaler()
+scaler = scaler.fit(f_train)
+
+print(f_train)
+f_train = scaler.transform(f_train)
+f_test = scaler.transform(f_test)
+
+
+# MU = float(f_train.mean())
+# SIGMA = float(f_train.std())
+# f_train = (f_train - MU) / SIGMA
+# f_test = (f_test - MU) / SIGMA
 
 # # min-max (normalization)
 # f_min = np.min(f_train)
@@ -64,9 +73,11 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=F
 
 # print(train_loader.dataset.data)
 
-TEST_NAME = "standard_sine_zscore_tanh"
+TEST_NAME = "test"
 
-SCALING = 'zscore'
+SCALING = scaler
+print('-------------------')
+print(scaler.mean_)
 
 INPUT_SIZE = len(train_fluxes[1])
 
@@ -78,7 +89,7 @@ CONFIG = [
 LATENT_SIZE = 500
 ACTIVATION_FUNCTION = 'ReLU'
 
-EPOCHS = 50
+EPOCHS = 5
 
 BETA = 1e-4 # kl weighting
 
@@ -116,11 +127,11 @@ early_stopping = mods.CustomEarlyStopping(TEST_NAME, patience = 5, delta = 0, te
 
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
 
-model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = True, )
+model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, early_stopping = None, beta=BETA, verbose = True, )
 
 funcs.plot_loss(model_losses, test_params['test_name'], test=testing)
 
-funcs.plot_examples(train_loader, model, l, test_params, MU, SIGMA, test = testing)
+funcs.plot_examples(train_loader, model, l, test_params, SCALING, test = testing)
 
 
 

@@ -5,7 +5,7 @@ from astropy.io import fits
 
 # Directory containing your files
 input_dir = '/home/worrellie/Documents/phd/autoencoder/Datasets/z08_v3-002'
-output_dir = 'merged_spectra_gal'
+output_dir = 'merged_z08_v3-002'
 os.makedirs(output_dir, exist_ok=True)
 
 # 1. Identify all unique '1h' exposure IDs
