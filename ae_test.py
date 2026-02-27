@@ -39,7 +39,7 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=F
 
 TEST_NAME = "standard_test_gal_relu"
 
-SCALING = 'zscore'
+SCALING = loader_of_data.scaler
 
 INPUT_SIZE = len(train[1])
 
@@ -95,5 +95,5 @@ funcs.plot_loss(model_losses, test_params['test_name'], test=testing)
 MU = loader_of_data.scaler
 SIGMA = loader_of_data.scaler
 
-funcs.plot_examples(train_loader, model, l, test_params, MU, SIGMA, test = testing)
+funcs.plot_examples(train_loader, model, l, test_params, SCALING, test = testing)
 

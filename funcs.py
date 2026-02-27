@@ -308,21 +308,21 @@ def _predict_examples(dataset, indices, model):
 
     return output
 
-def unstandardize(reconstructed, std, n1, n2):
+# def unstandardize(reconstructed, std, n1, n2):
 
-    # n1 is MU or MIN
-    # n2 is SIGMA or MAX
+#     # n1 is MU or MIN
+#     # n2 is SIGMA or MAX
 
-    if std == 'zscore':
-        recon = (np.array(reconstructed) * n2) + n1
-    elif std == 'minmax':
-        n = n2 - n1
-        recon = (np.array(reconstructed) * n) + n1
+#     if std == 'zscore':
+#         recon = (np.array(reconstructed) * n2) + n1
+#     elif std == 'minmax':
+#         n = n2 - n1
+#         recon = (np.array(reconstructed) * n) + n1
 
-    return list(recon)
+#     return list(recon)
 
 
-def _plot_example_specs(output, l, indices, std, n1, n2):
+def _plot_example_specs(output, l, indices, scaler):
     fig = plt.figure(figsize=(20, 10))
     
     
@@ -337,7 +337,7 @@ def _plot_example_specs(output, l, indices, std, n1, n2):
         ax_fit = fig.add_subplot(gs[0, 2*i:2*i+2])
         ax_res = fig.add_subplot(gs[1, 2*i:2*i+2], sharex=ax_fit)
         
-        _draw_spec_pair(ax_fit, ax_res, output, i, l, std, n1, n2)
+        _draw_spec_pair(ax_fit, ax_res, output, i, l, scaler)
 
     # --- BOTTOM ROW (2 Plots) ---
     # Column spans: 0-3, 3-6 (Centering them)
@@ -347,17 +347,20 @@ def _plot_example_specs(output, l, indices, std, n1, n2):
         ax_fit = fig.add_subplot(gs[2, 3*i:3*i+3])
         ax_res = fig.add_subplot(gs[3, 3*i:3*i+3], sharex=ax_fit)
         
-        _draw_spec_pair(ax_fit, ax_res, output, idx, l, std, n1, n2)
+        _draw_spec_pair(ax_fit, ax_res, output, idx, l, sacler)
 
     plt.tight_layout()
     # plt.show()
 
     return fig
 
-def _draw_spec_pair(ax_fit, ax_res, output, i, l, std, n1, n2):
+def _draw_spec_pair(ax_fit, ax_res, output, i, l, scaler):
     
-    recon = unstandardize(output['recon'][i], std, n1, n2)
-    og = unstandardize(output['original'][i], std, n1, n2)
+    # recon = unstandardize(output['recon'][i], std, n1, n2)
+    # og = unstandardize(output['original'][i], std, n1, n2)
+    print(output['recon'][i])
+    recon = scaler.inverse_transform(output['recon'][i])
+    og = scaler.inverse_transform(output['original'][i])
     
     
     resid = [x - y for x,y in zip(output['original'][i], output['recon'][i])]
@@ -376,7 +379,7 @@ def _draw_spec_pair(ax_fit, ax_res, output, i, l, std, n1, n2):
 
 
 
-def plot_examples(loader, model, l, test_params, n1, n2, test=False):
+def plot_examples(loader, model, l, test_params, scaler, test=False):
 
     indices = _get_example_specs(loader, model)
 
@@ -387,7 +390,7 @@ def plot_examples(loader, model, l, test_params, n1, n2, test=False):
     # _plot_example_specsA(output, l, indices, std, n1, n2)
 
     std = test_params["scaling"]
-    fig = _plot_example_specs(output, l, indices, std, n1, n2)
+    fig = _plot_example_specs(output, l, indices, scaler)
 
     fig.suptitle(f"{test_params['scaling']}, latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['epochs']}")
 
