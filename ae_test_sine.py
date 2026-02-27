@@ -68,12 +68,12 @@ test_fluxes = f_test
 train_dataset = SpecDataset(train_fluxes)
 test_dataset = SpecDataset(test_fluxes)
 
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=False)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=False)
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle=True)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=True)
 
 # print(train_loader.dataset.data)
 
-TEST_NAME = "test"
+TEST_NAME = "test_sine"
 
 SCALING = scaler
 print('-------------------')
