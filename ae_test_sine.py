@@ -73,7 +73,7 @@ test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=F
 
 # print(train_loader.dataset.data)
 
-TEST_NAME = "standard_sine_zscore_relu"
+TEST_NAME = "test"
 
 SCALING = scaler
 print('-------------------')

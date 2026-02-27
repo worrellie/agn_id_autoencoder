@@ -347,7 +347,7 @@ def _plot_example_specs(output, l, indices, scaler):
         ax_fit = fig.add_subplot(gs[2, 3*i:3*i+3])
         ax_res = fig.add_subplot(gs[3, 3*i:3*i+3], sharex=ax_fit)
         
-        _draw_spec_pair(ax_fit, ax_res, output, idx, l, sacler)
+        _draw_spec_pair(ax_fit, ax_res, output, idx, l, scaler)
 
     plt.tight_layout()
     # plt.show()
@@ -358,9 +358,13 @@ def _draw_spec_pair(ax_fit, ax_res, output, i, l, scaler):
     
     # recon = unstandardize(output['recon'][i], std, n1, n2)
     # og = unstandardize(output['original'][i], std, n1, n2)
-    print(output['recon'][i])
-    recon = scaler.inverse_transform(output['recon'][i])
-    og = scaler.inverse_transform(output['original'][i])
+    # print(output['recon'][i])
+    recon = np.reshape(output['recon'][i], (1, -1))
+    og = np.reshape(output['original'][i], (1, -1))
+    recon = scaler.inverse_transform(recon)
+    og = scaler.inverse_transform(og)
+    recon = recon.flatten('F')
+    og = og.flatten('F')
     
     
     resid = [x - y for x,y in zip(output['original'][i], output['recon'][i])]

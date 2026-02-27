@@ -37,7 +37,7 @@ train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=64, shuffle
 valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=64, shuffle=False)
 test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=64, shuffle=False)
 
-TEST_NAME = "standard_test_gal_relu"
+TEST_NAME = "test"
 
 SCALING = loader_of_data.scaler
 

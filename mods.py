@@ -298,6 +298,10 @@ class LoadData:
 
     def scale_raw(self, f_train, f_valid, f_test):
         
+        f_train = np.asarray(f_train)
+        f_valid = np.asarray(f_valid)
+        f_test = np.asarray(f_test)
+
         self.scaler = self.scaler.fit(f_train)
 
         scaled_train = self.scaler.transform(f_train)
@@ -305,9 +309,6 @@ class LoadData:
         scaled_test = self.scaler.transform(f_test)
 
         # convert to pytorch tensor
-        scaled_train = np.asarray(scaled_train)
-        scaled_valid = np.asarray(scaled_valid)
-        scaled_test = np.asarray(scaled_test)
 
         scaled_train = torch.from_numpy(scaled_train)
         scaled_valid = torch.from_numpy(scaled_valid)
