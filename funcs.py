@@ -17,6 +17,25 @@ import pickle as pkl
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
+def get_model_size_mb(model):
+    # Calculate parameters (weights that are trained)
+    param_size = 0
+    for param in model.parameters():
+        param_size += param.nelement() * param.element_size()
+    
+    # Calculate buffers (fixed tensors like running means)
+    buffer_size = 0
+    for buffer in model.buffers():
+        buffer_size += buffer.nelement() * buffer.element_size()
+
+    total_size_mb = (param_size + buffer_size) / 1024**2
+
+    print(f"model size: {total_size_mb}")
+
+    return total_size_mb
+
+
+
 def _loss_calc(x_hat, x, mu = None, logvar = None, beta = 0, red = 'mean'):
 
     mse = nn.MSELoss(reduction = red)
