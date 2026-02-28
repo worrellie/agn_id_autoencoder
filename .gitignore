@@ -18,5 +18,18 @@ test/
 merged_z08_v3-002/
 merged_z09_v3-001/
 merged_spectra_gal/
+merged_z09_v3-001_linearly_scaled_noiseless_1h/
+merged_z09_v3-001_linearly_scaled_noiseless_8h/
+merged_z09_v3-001_linearly_scaled_noisy_1h/
+merged_z09_v3-001_linearly_scaled_noisy_8h/
+
+merged_*/
+*_noisy/
+*_noiseless/
+
+*.pt
+all_z09_tanh/
+all_z09_relu/
+all_z09_sigmoid/
 
 Rapport_Gaétane_MAISSA_compressed.pdf

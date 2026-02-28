@@ -32,30 +32,29 @@ train_dataset = SpecDataset(train)
 valid_dataset = SpecDataset(valid)
 test_dataset = SpecDataset(test)
 
-train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=2, shuffle=False)
-valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=2, shuffle=False)
-test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=2, shuffle=False)
+train_loader = torch.utils.data.DataLoader(train_dataset, batch_size=32, shuffle=False)
+valid_loader = torch.utils.data.DataLoader(valid_dataset, batch_size=32, shuffle=False)
+test_loader = torch.utils.data.DataLoader(test_dataset, batch_size=32, shuffle=False)
 
-TEST_NAME = "all_z09_relu_3layer"
+TEST_NAME = "all_z09_relu_no_early_stop"
 
 SCALING = loader_of_data.scaler
 
 INPUT_SIZE = len(train[1])
 
 CONFIG = [
-    {'in': 8000,   'out': 5000, },
-    {'in': 5000,  'out': 3000, },
+    {'in': 5000,   'out': 3000, },
     {'in': 3000,  'out': 2000, },
 ]
 
-LATENT_SIZE = 1000
+LATENT_SIZE = 500
 ACTIVATION_FUNCTION = 'ReLU'
 
 EPOCHS = 500
 
 BETA = 1e-4 # kl weighting only used in VAE
 
-LEARNING_RATE = 1e-3
+LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 1e-8
 
 test_params = {
@@ -79,16 +78,21 @@ funcs.save_test_params(test_params, TEST_NAME, test=testing)
 
 model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
 print(model)
+# print(funcs.get_model_size_mb(model))
+# model.half()
+# print(funcs.get_model_size_mb(model))
+# exit()
 
-early_stopping = mods.CustomEarlyStopping(TEST_NAME, patience = 5, delta = 0.05, test = testing, verbose = True)
+# early_stopping = mods.CustomEarlyStopping(TEST_NAME, patience = 10, delta = 0.0, test = testing, verbose = True)
 
 optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
+# optimizer = torch.optim.SGD(model.parameters(), lr=LEARNING_RATE)
 
 ###############################################
 
 # train
 torch.cuda.empty_cache()
-model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = True, )
+model, model_losses = train_ae(EPOCHS, train_loader, test_loader, model, optimizer, beta=BETA, verbose = True, )
 
 funcs.plot_loss(model_losses, test_params['test_name'], test=testing)
 
