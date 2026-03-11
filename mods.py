@@ -38,7 +38,11 @@ class H5SpecDataset(torch.utils.data.Dataset):
         with h5py.File(self.data_path, 'r') as hf:
             sample = torch.from_numpy(hf[self.split][self.flux_type][idx])
             sample_mask = sample != 0
-            print(sample_mask)
+
+            # make sure sample is float32 (best for Pytorch, also I think what is in the h5)
+            sample = sample.float()
+            sample_mask = sample_mask.bool()
+
             return sample, sample_mask
 
 
@@ -57,57 +61,6 @@ class SpecDataset(torch.utils.data.Dataset):
         return sample, sample
 
 ####### autoencoders ########
-
-
-class ReportAutoencoder(nn.Module):
-
-    def __init__(self, input_size, activation = 'ReLU'):
-        super(ReportAutoencoder, self).__init__()
-
-        self.act_func = getattr(nn, activation)() # make instance of desired activation function
-
-
-
-        self.layers = nn.ModuleList()
-
-        self.input_to_encoder = nn.Linear(input_size, 256)
-        self.layers.append(self.input_to_encoder)
-
-        self.encoder_to_latent = nn.Linear(256, 64)
-        self.layers.append(self.encoder_to_latent)
-        
-        self.latent_to_decoder = nn.Linear(64, 256)
-        self.layers.append(self.latent_to_decoder)
-
-        self.decoder_to_output = nn.Linear(64, input_size)
-        self.layers.append(self.decoder_to_output)
-
-    def forward(self, x):
-
-        x = self.act_func(self.input_to_encoder(x))
-        x = self.act_func(self.encoder_to_latent(x))
-
-        x = self.act_func(self.latent_to_decoder(x))
-        x_hat = self.decoder_to_output(x)
-
-        # for l in self.layers:
-        #     # x = torch.relu(l(x))
-        #     x = self.act_func(l(x))
-
-        # z = torch.relu(self.encoder_to_latent(x))
-        # z = self.act_func(self.encoder_to_latent(x))
-
-        # z = torch.relu(self.decoder_from_latent(z))
-        # z = self.act_func(self.decoder_from_latent(z))
-
-        # for l in self.decoder_layers:
-        #     # z = torch.relu(l(z))
-        #     z = self.act_func(l(z))
-
-        x_hat = self.decoder_to_output(z)
-
-        return x_hat, None, None
-
 
 class StandardAutoencoder(nn.Module):
 
@@ -142,25 +95,33 @@ class StandardAutoencoder(nn.Module):
 
     def forward(self, x):
 
+        print(x.shape)
         # x = torch.relu(self.input_to_encoder(x))
         x = self.act_func(self.input_to_encoder(x))
+
+        print(x.shape)
 
         for l in self.encoder_layers:
             # x = torch.relu(l(x))
             x = self.act_func(l(x))
+            print(x.shape)
 
         # z = torch.relu(self.encoder_to_latent(x))
         z = self.act_func(self.encoder_to_latent(x))
+        print(z.shape)
 
         # z = torch.relu(self.decoder_from_latent(z))
         z = self.act_func(self.decoder_from_latent(z))
+        print(z.shape)
 
 
         for l in self.decoder_layers:
             # z = torch.relu(l(z))
             z = self.act_func(l(z))
+            print(z.shape)
 
         x_hat = self.decoder_to_output(z)
+        print(x_hat.shape)
 
         return x_hat, None, None
 

@@ -9,6 +9,7 @@ wheels/
 # Virtual environments
 .venv
 
+# Other
 Datasets/
 processed_z08/
 data/

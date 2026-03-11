@@ -36,24 +36,28 @@ def get_model_size_mb(model):
 
 def _loss_calc(x_hat, x, mu = None, logvar = None, beta = 0, red = 'mean'):
 
-    mse = nn.MSELoss(reduction = red)
-    recon_loss = mse(x_hat, x)
+    # mean mse for batch
+    mean_masked_mse_for_batch = masked_mse_per_sample.sum() / batch_size
+    # print(f'masked recon loss (mean for batch): {mean_masked_mse_for_batch}')
 
     if mu is not None and logvar is not None: # (if is VAE)
-        kl_sum = (- 0.5*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
-        if red == 'mean':
-            kl_div = kl_sum / x.shape[0]
-        else:
-            kl_div = kl_sum
+        # kl divs in latent space (one for each dim of latent space):
+        kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()) 
+        mean_kl_div_for_batch = kl_divs.sum() / batch_size
+        # print(f'mean_kl_div_for_batch: {mean_kl_div_for_batch}')
     else:
-        kl_div = torch.tensor(0.0).to(x.device)
+        mean_kl_div_for_batch = torch.tensor(0.0).to(x.device)
+    
 
-    loss = recon_loss + (beta * kl_div)
+    recon_loss = mean_masked_mse_for_batch
+    kl_loss = mean_kl_div_for_batch
 
-    return recon_loss, kl_div, loss
+    total_loss = recon_loss + (beta * kl_loss)
+
+    return recon_loss, kl_loss, total_loss
 
 
-def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stopping = None, beta = 0 , verbose = True, *args):
+def train_ae(epochs, train_loader, valid_loader, model, optimizer, train_mean = None, train_std = None, early_stopping = None, beta = 0 , verbose = True, *args):
 
     print('training model...')
 
@@ -78,13 +82,23 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stoppin
         valid_mse = 0
         valid_kl = 0
 
-        for x, _ in train_loader:
+        for x, x_mask in train_loader:
+
+            if train_mean is not None and train_std is not None:
+                x = (x - train_mean) / train_std # normalize data
+                x = x * x_mask # to ensure instrument gap has 0 flux
+            elif train_mean is None and traind_std is None:
+                continue
+            else:
+                print('something went wrong with normalisation./n you are missing mean or std')
 
             x = x.to(device)
+            x_mask = x_mask.to(device)
 
             x_hat, mu, logvar = model(x) # batch prediction
 
-            mse, kl, loss = _loss_calc(x_hat, x, mu = mu, logvar = logvar, beta = beta, red = 'mean') # 'mean' gives loss per sample for batch
+            # stats for *batch*
+            mse, kl, loss = _loss_calc(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = beta) # 'mean' gives loss per sample for batch
 
             optimizer.zero_grad()
 
@@ -93,7 +107,9 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stoppin
             # print(type(loss))
             # print(loss)
 
-            train_mse += mse.item() * x.size(0) # reconstruction loss
+            train_mse += mse.item() * x.size(0) # reconstruction loss per sample 
+            # (mse.item is batch mean therefore need to multiply by number in batch
+            # and later divide by number of samples)
             train_kl += kl.item() * x.size(0) # kl divergence
             # train_w_kls += w_kl.item() / x.size(0) # weighted kl divergence
 
@@ -126,10 +142,11 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stoppin
                 for x, _ in valid_loader:
 
                     x = x.to(device)
+                    x_mask = x_mask.to(device)
 
                     x_hat, mu, logvar = model(x)
 
-                    mse, kl, loss = _loss_calc(x_hat, x, mu = mu, logvar = logvar, beta = beta, red = 'mean') # 'mean' gives loss per sample for batch
+                    mse, kl, loss = _loss_calc(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = beta) # 'mean' gives loss per sample for batch
 
                     valid_mse += mse.item() * x.size(0) # reconstruction loss
                     valid_kl += kl.item() * x.size(0) # kl divergence
@@ -264,8 +281,16 @@ def _get_example_specs(loader, model):
         shuffle=False, 
     )
 
+
+    temp_loader = torch.utils.data.DataLoader(
+        loader.dataset, 
+        batch_size=loader.batch_size, 
+        shuffle=False, 
+    )
+
     print('predicting...')
     losses = []
+    model.eval()
     model.eval()
     with torch.no_grad():
         for x, _ in loader:
@@ -278,10 +303,15 @@ def _get_example_specs(loader, model):
             # print('HERE ', mse.shape)
             # loss_per_spec = mse.mean(dim=1) # mean per spec
             loss_per_spec = mse.mean() # mean per spec
+            _, mse, _ = _loss_calc(x_hat, x, mu, logvar, red='none')
+            # mse = mse.detach().cpu()
+            print('HERE ', mse.shape)
+            loss_per_spec = mse.flatten(1).mean(dim=1) # mean per spec
             # print(loss_per_spec.shape)
             # losses.extend(loss_per_spec.cpu().numpy().tolist())
             # losses.extend(loss_per_spec.numpy())
             losses.append(loss_per_spec.numpy())
+            losses.extend(loss_per_spec.cpu().numpy().tolist())
 
     to_find = {
         "min": np.min(losses),
@@ -313,6 +343,7 @@ def _predict_examples(dataset, indices, model):
     print('predicting min, max, mean and quartiles...')
 
     model.eval()
+    model.eval()
     with torch.no_grad():
         for i in indices:
             x = dataset[i][0].to(device)
@@ -327,10 +358,15 @@ def _predict_examples(dataset, indices, model):
             # print('here also', mse.shape)
             # loss_per_spec = mse.mean(dim=1) # mean per spec
             loss_per_spec = mse.mean() # mean per spec
+            _, mse, _ = _loss_calc(x_hat, x, mu, logvar, red='none')
+            # mse = mse.detach().cpu()
+            print('here also', loss.shape)
+            loss_per_spec = mse.flatten(1).mean(dim=1) # mean per spec
             # print(loss_per_spec.shape)
             # output['loss'].extend(loss_per_spec.cpu().numpy().tolist())
             # output['loss'].extend(loss_per_spec.numpy())
             output['loss'].append(loss_per_spec.numpy())
+            output['loss'].extend(loss_per_spec.cpu().numpy().tolist())
 
             x = x.squeeze(0)
             x_hat = x_hat.squeeze(0) # add then remove batch dimension
