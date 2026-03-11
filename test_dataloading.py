@@ -86,5 +86,5 @@ model, model_losses = funcs.train_ae(EPOCHS, train_loader, test_loader, model, o
 
 funcs.plot_loss(model_losses, test_params['test_name'], test=TESTING)
 
-funcs.plot_examples(train_loader, model, l, test_params, SCALING, test = TESTING)
+funcs.plot_examples(train_loader, model, l, test_params, test = TESTING)
 # funcs.plot_examples(valid_loader, model, l, test_params, SCALING, test = TESTING)

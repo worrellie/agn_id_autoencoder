@@ -34,7 +34,7 @@ def get_model_size_mb(model):
 
     return total_size_mb
 
-def _loss_calc(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+def _loss_calc_batch(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
     batch_size = x_hat.shape[0]
     n_unmasked_pixels = x_mask.sum(dim=1)
@@ -110,7 +110,7 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, train_mean = 
             x_hat, mu, logvar = model(x) # batch prediction
 
             # stats for *batch*
-            mse, kl, loss = _loss_calc(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = beta) # 'mean' gives loss per sample for batch
+            mse, kl, loss = _loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = beta) # 'mean' gives loss per sample for batch
 
             optimizer.zero_grad()
 
@@ -158,7 +158,7 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, train_mean = 
 
                     x_hat, mu, logvar = model(x)
 
-                    mse, kl, loss = _loss_calc(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = beta) # 'mean' gives loss per sample for batch
+                    mse, kl, loss = _loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = beta) # 'mean' gives loss per sample for batch
 
                     valid_mse += mse.item() * x.size(0) # reconstruction loss
                     valid_kl += kl.item() * x.size(0) # kl divergence
@@ -256,32 +256,32 @@ def plot_loss(model_losses, test_name, test= False):
     plt.show()
 
 
-def test_agn(loader, model):
+# def test_agn(loader, model):
 
-    model.eval()
+#     model.eval()
 
-    losses = []
-    with torch.no_grad():
+#     losses = []
+#     with torch.no_grad():
 
-        recon_loss = nn.MSELoss()
+#         recon_loss = nn.MSELoss()
 
-        total_loss = 0
-        for x, _ in loader:
+#         total_loss = 0
+#         for x, _ in loader:
 
-            x = x.to(device)
+#             x = x.to(device)
 
-            x_hat, mu, logvar = model(x)
+#             x_hat, mu, logvar = model(x)
 
-            loss = recon_loss(x_hat, x) + (- 0.5*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
+#             loss = recon_loss(x_hat, x) + (- 0.5*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
 
-            total_loss += loss.item()
+#             total_loss += loss.item()
             
-        avg_loss = total_loss / len(loader.dataset)
-        losses.append(avg_loss)
+#         avg_loss = total_loss / len(loader.dataset)
+#         losses.append(avg_loss)
 
-    print(min(losses))
-    print(max(losses))
-    print(np.mean(losses))
+#     print(min(losses))
+#     print(max(losses))
+#     print(np.mean(losses))
 
 
 def _get_example_specs(loader, model):
@@ -293,29 +293,29 @@ def _get_example_specs(loader, model):
         shuffle=False, 
     )
 
-
-    temp_loader = torch.utils.data.DataLoader(
-        loader.dataset, 
-        batch_size=loader.batch_size, 
-        shuffle=False, 
-    )
+    # temp_loader = torch.utils.data.DataLoader(
+    #     loader.dataset, 
+    #     batch_size=loader.batch_size, 
+    #     shuffle=False, 
+    # )
 
     print('predicting...')
     losses = []
     model.eval()
     model.eval()
     with torch.no_grad():
-        for x, _ in loader:
+        for x, x_mask in loader:
             # print(x.size())
             x = x.to(device)
+            x_mask = x_mask.to(device)
             x_hat, mu, logvar = model(x)
-            mse, _, _ = _loss_calc(x_hat, x, mu, logvar, red='none')
+            mse, _, _ = _loss_calc(x_hat, x, x_mask, mu, logvar, )
             print(mse)
             mse = mse.detach().cpu()
             # print('HERE ', mse.shape)
             # loss_per_spec = mse.mean(dim=1) # mean per spec
             loss_per_spec = mse.mean() # mean per spec
-            _, mse, _ = _loss_calc(x_hat, x, mu, logvar, red='none')
+            _, mse, _ = _loss_calc(x_hat, x, x_mask, mu, logvar, )
             # mse = mse.detach().cpu()
             print('HERE ', mse.shape)
             loss_per_spec = mse.flatten(1).mean(dim=1) # mean per spec
@@ -404,7 +404,7 @@ def _predict_examples(dataset, indices, model):
 #     return list(recon)
 
 
-def _plot_example_specs(output, l, indices, scaler):
+def _plot_example_specs(output, l, indices):
     fig = plt.figure(figsize=(20, 10))
     
     
@@ -419,7 +419,7 @@ def _plot_example_specs(output, l, indices, scaler):
         ax_fit = fig.add_subplot(gs[0, 2*i:2*i+2])
         ax_res = fig.add_subplot(gs[1, 2*i:2*i+2], sharex=ax_fit)
         
-        _draw_spec_pair(ax_fit, ax_res, output, i, l, scaler)
+        _draw_spec_pair(ax_fit, ax_res, output, i, l)
 
     # --- BOTTOM ROW (2 Plots) ---
     # Column spans: 0-3, 3-6 (Centering them)
@@ -429,24 +429,26 @@ def _plot_example_specs(output, l, indices, scaler):
         ax_fit = fig.add_subplot(gs[2, 3*i:3*i+3])
         ax_res = fig.add_subplot(gs[3, 3*i:3*i+3], sharex=ax_fit)
         
-        _draw_spec_pair(ax_fit, ax_res, output, idx, l, scaler)
+        _draw_spec_pair(ax_fit, ax_res, output, idx, l)
 
     plt.tight_layout()
     # plt.show()
 
     return fig
 
-def _draw_spec_pair(ax_fit, ax_res, output, i, l, scaler):
+def _draw_spec_pair(ax_fit, ax_res, output, i, l,):
     
     # recon = unstandardize(output['recon'][i], std, n1, n2)
     # og = unstandardize(output['original'][i], std, n1, n2)
     # print(output['recon'][i])
-    recon = np.reshape(output['recon'][i], (1, -1))
-    og = np.reshape(output['original'][i], (1, -1))
-    recon = scaler.inverse_transform(recon)
-    og = scaler.inverse_transform(og)
-    recon = recon.flatten('F')
-    og = og.flatten('F')
+    recon = output['recon'][i]
+    og = output['original'][i]
+    # recon = np.reshape(output['recon'][i], (1, -1))
+    # og = np.reshape(output['original'][i], (1, -1))
+    # recon = scaler.inverse_transform(recon)
+    # og = scaler.inverse_transform(og)
+    # recon = recon.flatten('F')
+    # og = og.flatten('F')
     
     
     # resid = [x - y for x,y in zip(output['original'][i], output['recon'][i])]
@@ -466,7 +468,7 @@ def _draw_spec_pair(ax_fit, ax_res, output, i, l, scaler):
 
 
 
-def plot_examples(loader, model, l, test_params, scaler, test=False):
+def plot_examples(loader, model, l, test_params, test=False):
 
     indices = _get_example_specs(loader, model)
 
@@ -476,10 +478,10 @@ def plot_examples(loader, model, l, test_params, scaler, test=False):
 
     # _plot_example_specsA(output, l, indices, std, n1, n2)
 
-    std = test_params["scaling"]
-    fig = _plot_example_specs(output, l, indices, scaler)
+    # std = test_params["scaling"]
+    fig = _plot_example_specs(output, l, indices, )
 
-    fig.suptitle(f"{test_params['scaling']}, latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['epochs']}")
+    fig.suptitle(f"latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['epochs']}")
 
     if not test:
         pth = path.Path(test_params['test_name'], f"{test_params['test_name']}.png")
