@@ -34,7 +34,19 @@ def get_model_size_mb(model):
 
     return total_size_mb
 
-def _loss_calc(x_hat, x, mu = None, logvar = None, beta = 0, red = 'mean'):
+def _loss_calc(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+
+    batch_size = x_hat.shape[0]
+    n_unmasked_pixels = x_mask.sum(dim=1)
+    
+    # pixel-wise
+    sq_err_per_element = (x_hat - x)**2
+
+    # apply masks
+    masked_sq_err = sq_err_per_element * x_mask
+
+    # mse per spec
+    masked_mse_per_sample =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
 
     # mean mse for batch
     mean_masked_mse_for_batch = masked_mse_per_sample.sum() / batch_size
