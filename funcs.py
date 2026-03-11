@@ -12,6 +12,7 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 import math
 import pickle as pkl
+from torch.utils.data import Subset
 # from ignite.engine import Engine, Events
 # from ignite.handlers import ModelCheckpoint
 
@@ -283,7 +284,6 @@ def plot_loss(model_losses, test_name, test= False):
     
     plt.show()
 
-
 def _get_example_specs(loader, model):
 
     # function to get the key spectra to compare
@@ -327,70 +327,42 @@ def _get_example_specs(loader, model):
         idx = (np.abs(losses - value)).argmin()
         idxs.append(idx)
 
-    return idxs
+    source_subset = Subset(loader.dataset, idxs)
+    subset_loader = torch.utils.data.DataLoader(source_subset, batch_size=1, shuffle=False)
 
-def _predict_examples(dataset, indices, model):
+    return subset_loader
+
+def _predict_examples(subset_loader, model,):
 
     output = {'recon' : [],
-              'original' : [],
+              'original' : [], 
+              'mask' : [],
               'loss' : []}
 
     print('predicting min, max, mean and quartiles...')
 
     model.eval()
     with torch.no_grad():
-        for i in indices:
-            print(dataset)
-            x = dataset[i][0].to(device)
-            # print(type(x))
-            # print(x.shape)
-            x= x.unsqueeze(0)
-            # note: need batch dimension for model
+        for x, x_mask in subset_loader:
+
+            x = x.to(device)
+            x_mask = x_mask.to(device)
+
             x_hat, mu, logvar = model(x)
-            # print(x_hat.shape)
-            mse, _, _ = _loss_calc_per_spec(x_hat, x, mu, logvar, )
-            mse = mse.detach().cpu()
-            # print('here also', mse.shape)
-            # loss_per_spec = mse.mean(dim=1) # mean per spec
-            loss_per_spec = mse.mean() # mean per spec
-            _, mse, _ = _loss_calc(x_hat, x, mu, logvar, red='none')
-            # mse = mse.detach().cpu()
-            print('here also', loss.shape)
-            loss_per_spec = mse.flatten(1).mean(dim=1) # mean per spec
-            # print(loss_per_spec.shape)
-            # output['loss'].extend(loss_per_spec.cpu().numpy().tolist())
-            # output['loss'].extend(loss_per_spec.numpy())
-            output['loss'].append(loss_per_spec.numpy())
-            output['loss'].extend(loss_per_spec.cpu().numpy().tolist())
 
-            x = x.squeeze(0)
-            x_hat = x_hat.squeeze(0) # add then remove batch dimension
-            x_hat = x_hat.detach().cpu()
-            output['recon'].append(x_hat.tolist())
-            output['original'].append(x.tolist())
-            print(len(output['loss']))
+            mses = _loss_calc_per_spec(x_hat, x, x_mask, mu, logvar, )
 
+            output['recon'].extend(x_hat.cpu().tolist())
+            output['original'].extend(x.cpu().tolist())
+            output['mask'].extend(x_mask.cpu().tolist())
+            output['loss'].extend(mses.cpu().tolist())
 
     return output
 
-# def unstandardize(reconstructed, std, n1, n2):
-
-#     # n1 is MU or MIN
-#     # n2 is SIGMA or MAX
-
-#     if std == 'zscore':
-#         recon = (np.array(reconstructed) * n2) + n1
-#     elif std == 'minmax':
-#         n = n2 - n1
-#         recon = (np.array(reconstructed) * n) + n1
-
-#     return list(recon)
-
-
-def _plot_example_specs(output, l, indices):
+def _plot_example_specs(output, l, ):
     fig = plt.figure(figsize=(20, 10))
     
-    
+
     # We use 6 columns to allow 3-over-2 centering
     # 4 rows: [Fit 1, Res 1, Fit 2, Res 2] - we handle vertical pairs manually
     gs = fig.add_gridspec(4, 6, height_ratios=[3, 1, 3, 1], hspace=0.4, wspace=0.4)
@@ -421,48 +393,27 @@ def _plot_example_specs(output, l, indices):
 
 def _draw_spec_pair(ax_fit, ax_res, output, i, l,):
     
-    # recon = unstandardize(output['recon'][i], std, n1, n2)
-    # og = unstandardize(output['original'][i], std, n1, n2)
-    # print(output['recon'][i])
     recon = output['recon'][i]
     og = output['original'][i]
-    # recon = np.reshape(output['recon'][i], (1, -1))
-    # og = np.reshape(output['original'][i], (1, -1))
-    # recon = scaler.inverse_transform(recon)
-    # og = scaler.inverse_transform(og)
-    # recon = recon.flatten('F')
-    # og = og.flatten('F')
-    
-    
-    # resid = [x - y for x,y in zip(output['original'][i], output['recon'][i])]
-    resid = og - recon
-    # r2 =[np.pow(x, 2) for x in resid]
-    # mean_r2 = np.mean(r2)
+
+    resid = [x - y for x,y in zip(og, recon)]
 
     # Fit Panel
     ax_fit.plot(l, og, color='black', alpha=0.7)
     ax_fit.plot(l, recon, color='red', linewidth=1)
     ax_fit.set_title(f"Loss: {output['loss'][i]:.5f}")
     
-
     # Residual Panel
     ax_res.scatter(l, resid, color='gray') # residuals of standardized data
     ax_res.axhline(0, color='black', lw=0.8, ls=':')
 
-
-
 def plot_examples(loader, model, l, test_params, test=False):
 
-    indices = _get_example_specs(loader, model)
+    subset_loader = _get_example_specs(loader, model)
 
-    data = loader.dataset
+    output = _predict_examples(subset_loader, model)
 
-    output = _predict_examples(data, indices, model)
-
-    # _plot_example_specsA(output, l, indices, std, n1, n2)
-
-    # std = test_params["scaling"]
-    fig = _plot_example_specs(output, l, indices, )
+    fig = _plot_example_specs(output, l, )
 
     fig.suptitle(f"latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['epochs']}")
 
