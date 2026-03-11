@@ -11,5 +11,6 @@ dependencies = ["numpy",
                 "specutils",
                 "torch",
                 "torchvision",
-                "scikit-learn"
+                "scikit-learn",
+                "h5py",
                 ]

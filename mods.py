@@ -11,9 +11,36 @@ import torch.nn.functional as F
 from torch.distributions.normal import Normal
 import math
 import pathlib as path
+import h5py
 
 import funcs
 import mods
+
+class H5SpecDataset(torch.utils.data.Dataset):
+
+    def __init__(self, data_path, split = 'train', flux_type = 'normalized_flux'):
+        self.data_path = data_path
+        self.split = split
+        self.flux_type = flux_type
+
+        with h5py.File(self.data_path, 'r') as hf:
+            self.len = hf[self.split][self.flux_type].shape[0]
+            # print(self.len)
+            # print(len(hf[self.split][self.flux_type]))
+            self.n_pixels = hf[self.split][self.flux_type].shape[1]
+            # print(self.n_pixels)
+
+    def __len__(self):
+
+        return self.len
+    
+    def __getitem__(self, idx):
+        with h5py.File(self.data_path, 'r') as hf:
+            sample = torch.from_numpy(hf[self.split][self.flux_type][idx])
+            sample_mask = sample != 0
+            print(sample_mask)
+            return sample, sample_mask
+
 
 class SpecDataset(torch.utils.data.Dataset):
 
@@ -30,6 +57,57 @@ class SpecDataset(torch.utils.data.Dataset):
         return sample, sample
 
 ####### autoencoders ########
+
+
+class ReportAutoencoder(nn.Module):
+
+    def __init__(self, input_size, activation = 'ReLU'):
+        super(ReportAutoencoder, self).__init__()
+
+        self.act_func = getattr(nn, activation)() # make instance of desired activation function
+
+
+
+        self.layers = nn.ModuleList()
+
+        self.input_to_encoder = nn.Linear(input_size, 256)
+        self.layers.append(self.input_to_encoder)
+
+        self.encoder_to_latent = nn.Linear(256, 64)
+        self.layers.append(self.encoder_to_latent)
+        
+        self.latent_to_decoder = nn.Linear(64, 256)
+        self.layers.append(self.latent_to_decoder)
+
+        self.decoder_to_output = nn.Linear(64, input_size)
+        self.layers.append(self.decoder_to_output)
+
+    def forward(self, x):
+
+        x = self.act_func(self.input_to_encoder(x))
+        x = self.act_func(self.encoder_to_latent(x))
+
+        x = self.act_func(self.latent_to_decoder(x))
+        x_hat = self.decoder_to_output(x)
+
+        # for l in self.layers:
+        #     # x = torch.relu(l(x))
+        #     x = self.act_func(l(x))
+
+        # z = torch.relu(self.encoder_to_latent(x))
+        # z = self.act_func(self.encoder_to_latent(x))
+
+        # z = torch.relu(self.decoder_from_latent(z))
+        # z = self.act_func(self.decoder_from_latent(z))
+
+        # for l in self.decoder_layers:
+        #     # z = torch.relu(l(z))
+        #     z = self.act_func(l(z))
+
+        x_hat = self.decoder_to_output(z)
+
+        return x_hat, None, None
+
 
 class StandardAutoencoder(nn.Module):
 
@@ -251,70 +329,70 @@ class CNNAutoencoder(nn.Module):
 
         return x_hat, mu, logvar
 
-class LoadData:
+# class LoadData:
 
-    def __init__(self, scaler, spec_dir ="/home/worrellie/Documents/phd/autoencoder/merged_spectra_gal",
-                 agn_dir="/home/worrellie/Documents/phd/autoencoder/agn/merged_spectra_agn"):
+#     def __init__(self, scaler, spec_dir ="/home/worrellie/Documents/phd/autoencoder/merged_spectra_gal",
+#                  agn_dir="/home/worrellie/Documents/phd/autoencoder/agn/merged_spectra_agn"):
         
-        self.spec_dir = spec_dir
-        self.agn_dir = agn_dir
-        self.scaler = scaler
+#         self.spec_dir = spec_dir
+#         self.agn_dir = agn_dir
+#         self.scaler = scaler
 
-    def load_raw(self,):
+#     def load_raw(self,):
 
-        fluxes = []
-        i=0
-        for spec in os.listdir(self.spec_dir):
-            i= i+1
-            spec_path = os.path.join(self.spec_dir, spec)
-            try:
-                with fits.open(spec_path) as hdul:
+#         fluxes = []
+#         i=0
+#         for spec in os.listdir(self.spec_dir):
+#             i= i+1
+#             spec_path = os.path.join(self.spec_dir, spec)
+#             try:
+#                 with fits.open(spec_path) as hdul:
 
-                    data = hdul[1].data
-                    flux = data['flux']
-                    # print(flux)
-                    l = data['lambda']
-                    self.l = l
-                    flux = flux.astype(np.float32)
-                    flux = torch.from_numpy(flux)
-                    fluxes.append(flux)
-                    # if i == 1:
-                    #     plt.figure()
-                    #     plt.plot(l,flux)
-                    #     # plt.show()
+#                     data = hdul[1].data
+#                     flux = data['flux']
+#                     # print(flux)
+#                     l = data['lambda']
+#                     self.l = l
+#                     flux = flux.astype(np.float32)
+#                     flux = torch.from_numpy(flux)
+#                     fluxes.append(flux)
+#                     # if i == 1:
+#                     #     plt.figure()
+#                     #     plt.plot(l,flux)
+#                     #     # plt.show()
         
 
-            except Exception as e:
-                print(f"Error opening spectrum: {spec} ({e})")
+#             except Exception as e:
+#                 print(f"Error opening spectrum: {spec} ({e})")
             
 
-        fluxes = np.asarray(fluxes)
-        INPUT_SIZE = len(fluxes[1])
+#         fluxes = np.asarray(fluxes)
+#         INPUT_SIZE = len(fluxes[1])
 
-        f_train, f_test = train_test_split(fluxes)
-        f_train, f_valid = train_test_split(f_train, test_size = 0.1)
+#         f_train, f_test = train_test_split(fluxes)
+#         f_train, f_valid = train_test_split(f_train, test_size = 0.1)
 
-        return f_train, f_valid, f_test
+#         return f_train, f_valid, f_test
 
-    def scale_raw(self, f_train, f_valid, f_test):
+#     def scale_raw(self, f_train, f_valid, f_test):
         
-        f_train = np.asarray(f_train)
-        f_valid = np.asarray(f_valid)
-        f_test = np.asarray(f_test)
+#         f_train = np.asarray(f_train)
+#         f_valid = np.asarray(f_valid)
+#         f_test = np.asarray(f_test)
 
-        self.scaler = self.scaler.fit(f_train)
+#         self.scaler = self.scaler.fit(f_train)
 
-        scaled_train = self.scaler.transform(f_train)
-        scaled_valid = self.scaler.transform(f_valid)
-        scaled_test = self.scaler.transform(f_test)
+#         scaled_train = self.scaler.transform(f_train)
+#         scaled_valid = self.scaler.transform(f_valid)
+#         scaled_test = self.scaler.transform(f_test)
 
-        # convert to pytorch tensor
+#         # convert to pytorch tensor
 
-        scaled_train = torch.from_numpy(scaled_train)
-        scaled_valid = torch.from_numpy(scaled_valid)
-        scaled_test = torch.from_numpy(scaled_test)
+#         scaled_train = torch.from_numpy(scaled_train)
+#         scaled_valid = torch.from_numpy(scaled_valid)
+#         scaled_test = torch.from_numpy(scaled_test)
 
-        return scaled_train, scaled_valid, scaled_test
+#         return scaled_train, scaled_valid, scaled_test
 
     # def load_agn(self,):
 

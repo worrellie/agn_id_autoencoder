@@ -34,8 +34,6 @@ def get_model_size_mb(model):
 
     return total_size_mb
 
-
-
 def _loss_calc(x_hat, x, mu = None, logvar = None, beta = 0, red = 'mean'):
 
     mse = nn.MSELoss(reduction = red)
@@ -259,19 +257,31 @@ def test_agn(loader, model):
 
 def _get_example_specs(loader, model):
 
+    # temp loader to not shuffle data (so can get the right pairs)
+    temp_loader = torch.utils.data.DataLoader(
+        loader.dataset, 
+        batch_size=loader.batch_size, 
+        shuffle=False, 
+    )
+
     print('predicting...')
     losses = []
+    model.eval()
     with torch.no_grad():
         for x, _ in loader:
             # print(x.size())
             x = x.to(device)
             x_hat, mu, logvar = model(x)
-            loss, mse, kl = _loss_calc(x_hat, x, mu, logvar, red='none')
-            loss = loss.detach().cpu()
-            # print(loss.shape)
-            loss_per_spec = loss.mean(dim=1) # mean per spec
+            mse, _, _ = _loss_calc(x_hat, x, mu, logvar, red='none')
+            print(mse)
+            mse = mse.detach().cpu()
+            # print('HERE ', mse.shape)
+            # loss_per_spec = mse.mean(dim=1) # mean per spec
+            loss_per_spec = mse.mean() # mean per spec
             # print(loss_per_spec.shape)
-            losses.extend(loss_per_spec)
+            # losses.extend(loss_per_spec.cpu().numpy().tolist())
+            # losses.extend(loss_per_spec.numpy())
+            losses.append(loss_per_spec.numpy())
 
     to_find = {
         "min": np.min(losses),
@@ -302,6 +312,7 @@ def _predict_examples(dataset, indices, model):
 
     print('predicting min, max, mean and quartiles...')
 
+    model.eval()
     with torch.no_grad():
         for i in indices:
             x = dataset[i][0].to(device)
@@ -311,18 +322,22 @@ def _predict_examples(dataset, indices, model):
             # note: need batch dimension for model
             x_hat, mu, logvar = model(x)
             # print(x_hat.shape)
-            loss, mse, kl = _loss_calc(x_hat, x, mu, logvar, red='none')
-            loss = loss.detach().cpu()
-            # print(loss.shape)
-            loss_per_spec = loss.mean(dim=1) # mean per spec
+            mse, _, _ = _loss_calc(x_hat, x, mu, logvar, red='none')
+            mse = mse.detach().cpu()
+            # print('here also', mse.shape)
+            # loss_per_spec = mse.mean(dim=1) # mean per spec
+            loss_per_spec = mse.mean() # mean per spec
             # print(loss_per_spec.shape)
-            output['loss'].extend(loss_per_spec)
+            # output['loss'].extend(loss_per_spec.cpu().numpy().tolist())
+            # output['loss'].extend(loss_per_spec.numpy())
+            output['loss'].append(loss_per_spec.numpy())
 
             x = x.squeeze(0)
             x_hat = x_hat.squeeze(0) # add then remove batch dimension
             x_hat = x_hat.detach().cpu()
             output['recon'].append(x_hat.tolist())
             output['original'].append(x.tolist())
+            print(len(output['loss']))
 
 
     return output
@@ -386,7 +401,8 @@ def _draw_spec_pair(ax_fit, ax_res, output, i, l, scaler):
     og = og.flatten('F')
     
     
-    resid = [x - y for x,y in zip(output['original'][i], output['recon'][i])]
+    # resid = [x - y for x,y in zip(output['original'][i], output['recon'][i])]
+    resid = og - recon
     # r2 =[np.pow(x, 2) for x in resid]
     # mean_r2 = np.mean(r2)
 
@@ -434,4 +450,15 @@ def save_test_params(test_dict, test_name, test=False):
     with open(path_name, 'wb') as p:
         pkl.dump(test_dict, p)
 
+def global_stats(loader):
+
+    all_fluxes = []
+    for batch_flux, batch_mask in loader:
+
+        mask = batch_flux != 0
+        all_fluxes.append(batch_flux[mask])
+
+    combined_fluxes = torch.cat(all_fluxes)
+    
+    return combined_fluxes.mean(), combined_fluxes.std()
 

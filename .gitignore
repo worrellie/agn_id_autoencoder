@@ -26,10 +26,19 @@ merged_z09_v3-001_linearly_scaled_noisy_8h/
 merged_*/
 *_noisy/
 *_noiseless/
+test_*/
 
 *.pt
 all_z09_tanh/
 all_z09_relu/
 all_z09_sigmoid/
+z09/
+z08/
+z09_and_z08/
+processed_z09_z08_noisy/
+processed_z09_z08_normalized_noisy/
+test_processed_z09_z08_normalized_noisy/
+
+*.h5
 
 Rapport_Gaétane_MAISSA_compressed.pdf
