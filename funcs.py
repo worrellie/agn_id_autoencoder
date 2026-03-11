@@ -68,6 +68,34 @@ def _loss_calc_batch(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
     return recon_loss, kl_loss, total_loss
 
+def _loss_calc_per_spec(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+
+    batch_size = x_hat.shape[0]
+    n_unmasked_pixels = x_mask.sum(dim=1)
+    
+    # pixel-wise
+    sq_err_per_element = (x_hat - x)**2
+
+    # apply masks
+    masked_sq_err = sq_err_per_element * x_mask
+
+    # mse per spec
+    masked_mse_per_sample =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
+
+    # if mu is not None and logvar is not None: # (if is VAE)
+    #     # kl divs in latent space (one for each dim of latent space):
+    #     kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+    # else:
+    #     mean_kl_div_for_batch = torch.tensor(0.0).to(x.device)
+    
+
+    recon_loss = masked_mse_per_sample
+    # kl_loss = mean_kl_div_for_batch
+
+    # total_loss = recon_loss + (beta * kl_loss)
+
+    return recon_loss
+
 
 def train_ae(epochs, train_loader, valid_loader, model, optimizer, train_mean = None, train_std = None, early_stopping = None, beta = 0 , verbose = True, *args):
 
@@ -256,35 +284,9 @@ def plot_loss(model_losses, test_name, test= False):
     plt.show()
 
 
-# def test_agn(loader, model):
-
-#     model.eval()
-
-#     losses = []
-#     with torch.no_grad():
-
-#         recon_loss = nn.MSELoss()
-
-#         total_loss = 0
-#         for x, _ in loader:
-
-#             x = x.to(device)
-
-#             x_hat, mu, logvar = model(x)
-
-#             loss = recon_loss(x_hat, x) + (- 0.5*torch.sum(1 + logvar - mu.pow(2) - logvar.exp()))
-
-#             total_loss += loss.item()
-            
-#         avg_loss = total_loss / len(loader.dataset)
-#         losses.append(avg_loss)
-
-#     print(min(losses))
-#     print(max(losses))
-#     print(np.mean(losses))
-
-
 def _get_example_specs(loader, model):
+
+    # function to get the key spectra to compare
 
     # temp loader to not shuffle data (so can get the right pairs)
     temp_loader = torch.utils.data.DataLoader(
@@ -293,37 +295,22 @@ def _get_example_specs(loader, model):
         shuffle=False, 
     )
 
-    # temp_loader = torch.utils.data.DataLoader(
-    #     loader.dataset, 
-    #     batch_size=loader.batch_size, 
-    #     shuffle=False, 
-    # )
-
     print('predicting...')
     losses = []
     model.eval()
-    model.eval()
     with torch.no_grad():
         for x, x_mask in loader:
-            # print(x.size())
+
             x = x.to(device)
             x_mask = x_mask.to(device)
+
             x_hat, mu, logvar = model(x)
-            mse, _, _ = _loss_calc(x_hat, x, x_mask, mu, logvar, )
-            print(mse)
-            mse = mse.detach().cpu()
-            # print('HERE ', mse.shape)
-            # loss_per_spec = mse.mean(dim=1) # mean per spec
-            loss_per_spec = mse.mean() # mean per spec
-            _, mse, _ = _loss_calc(x_hat, x, x_mask, mu, logvar, )
-            # mse = mse.detach().cpu()
-            print('HERE ', mse.shape)
-            loss_per_spec = mse.flatten(1).mean(dim=1) # mean per spec
-            # print(loss_per_spec.shape)
-            # losses.extend(loss_per_spec.cpu().numpy().tolist())
-            # losses.extend(loss_per_spec.numpy())
-            losses.append(loss_per_spec.numpy())
-            losses.extend(loss_per_spec.cpu().numpy().tolist())
+
+            mses = _loss_calc_per_spec(x_hat, x, x_mask, mu, logvar, )
+            mses = mses.cpu().tolist()
+
+            losses.extend(mses)
+
 
     to_find = {
         "min": np.min(losses),
@@ -337,12 +324,8 @@ def _get_example_specs(loader, model):
 
     idxs = []
     for key, value in to_find.items():
-        # print(len(np.abs(losses - value)))
         idx = (np.abs(losses - value)).argmin()
         idxs.append(idx)
-    # print(idxs)
-    
-    # print(to_find)
 
     return idxs
 
@@ -355,9 +338,9 @@ def _predict_examples(dataset, indices, model):
     print('predicting min, max, mean and quartiles...')
 
     model.eval()
-    model.eval()
     with torch.no_grad():
         for i in indices:
+            print(dataset)
             x = dataset[i][0].to(device)
             # print(type(x))
             # print(x.shape)
@@ -365,7 +348,7 @@ def _predict_examples(dataset, indices, model):
             # note: need batch dimension for model
             x_hat, mu, logvar = model(x)
             # print(x_hat.shape)
-            mse, _, _ = _loss_calc(x_hat, x, mu, logvar, red='none')
+            mse, _, _ = _loss_calc_per_spec(x_hat, x, mu, logvar, )
             mse = mse.detach().cpu()
             # print('here also', mse.shape)
             # loss_per_spec = mse.mean(dim=1) # mean per spec
