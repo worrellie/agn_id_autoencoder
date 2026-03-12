@@ -98,9 +98,14 @@ def _loss_calc_per_spec(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
     return recon_loss
 
 
-def train_ae(epochs, train_loader, valid_loader, model, optimizer, train_mean = None, train_std = None, early_stopping = None, beta = 0 , verbose = True, *args):
+def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stopping = None, beta = 0 , verbose = True, *args):
 
     print('training model...')
+
+    train_mean = train_loader.dataset.mean
+    train_std = train_loader.dataset.std
+    # train_mean = None
+    # train_std = None
 
     model.to(device)
 
@@ -123,12 +128,16 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, train_mean = 
         valid_mse = 0
         valid_kl = 0
 
+        processed_samples = 0
+
         for x, x_mask in train_loader:
 
             if train_mean is not None and train_std is not None:
+                # print('normalizing input data')
                 x = (x - train_mean) / train_std # normalize data
                 x = x * x_mask # to ensure instrument gap has 0 flux
-            elif train_mean is None and traind_std is None:
+            elif train_mean is None and train_std is None:
+                # print('no normalization of input data')
                 continue
             else:
                 print('something went wrong with normalisation./n you are missing mean or std')
@@ -158,16 +167,19 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, train_mean = 
 
             optimizer.step()
 
-        train_samples = len(train_loader.dataset)
+        # train_samples = len(train_loader.dataset)
 
-        epoch_avg_mse = train_mse / train_samples
+            # in case drop_last is True, divide my number used, rather than dataset size
+            processed_samples += x.size(0)
+
+        epoch_avg_mse = train_mse / processed_samples
         train_mses.append(epoch_avg_mse)
-        epoch_avg_kl = train_kl / train_samples
+        epoch_avg_kl = train_kl / processed_samples
         train_kls.append(epoch_avg_kl)
         # epoch_avg_w_kl = train_w_kl / train_samples
         # train_w_kls.append(epoch_avg_w_kls)
 
-        epoch_avg_loss = train_loss / train_samples # average loss per sample 
+        epoch_avg_loss = train_loss / processed_samples # average loss per sample 
         train_losses.append(epoch_avg_loss) # losses for each epoch
 
         if verbose:
@@ -180,7 +192,18 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, train_mean = 
 
             with torch.no_grad():
 
-                for x, _ in valid_loader:
+                processed_samples_valid = 0 
+
+                for x, x_mask in valid_loader:
+                    # print('normalizing input data')
+                    if train_mean is not None and train_std is not None:
+                        x = (x - train_mean) / train_std # normalize data
+                        x = x * x_mask # to ensure instrument gap has 0 flux
+                    elif train_mean is None and train_std is None:
+                        continue
+                        # print('no normalization of input data')
+                    else:
+                        print('something went wrong with normalisation./n you are missing mean or std')
 
                     x = x.to(device)
                     x_mask = x_mask.to(device)
@@ -195,16 +218,18 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, train_mean = 
 
                     valid_loss += loss.item() * x.size(0)
 
-                valid_samples = len(valid_loader.dataset)
+                # valid_samples = len(valid_loader.dataset)
 
-                epoch_avg_valid_mse = valid_mse / valid_samples
+                    processed_samples_valid += x.size(0)
+
+                epoch_avg_valid_mse = valid_mse / processed_samples_valid
                 valid_mses.append(epoch_avg_valid_mse)
-                epoch_avg_valid_kl = valid_kl / valid_samples
+                epoch_avg_valid_kl = valid_kl / processed_samples_valid
                 valid_kls.append(epoch_avg_valid_kl)
                 # epoch_avg_valid_w_kl = valid_w_kl / valid_samples
                 # valid_w_kls.append(epoch_avg_valid_w_kls)
                 
-                epoch_avg_valid_loss = valid_loss / valid_samples
+                epoch_avg_valid_loss = valid_loss / processed_samples_valid
                 valid_losses.append(epoch_avg_valid_loss)
 
             if verbose:
@@ -295,11 +320,29 @@ def _get_example_specs(loader, model):
         shuffle=False, 
     )
 
+    train_mean = temp_loader.dataset.mean
+    train_std = temp_loader.dataset.std
+    # train_mean = None
+    # train_std = None
+
+
     print('predicting...')
     losses = []
     model.eval()
     with torch.no_grad():
-        for x, x_mask in loader:
+        for x, x_mask in temp_loader:
+
+            if train_mean is not None and train_std is not None:
+                # print('normalizing input data')
+                x = (x - train_mean) / train_std # normalize data
+                x = x * x_mask # to ensure instrument gap has 0 flux
+            elif train_mean is None and train_std is None:
+                # print('no normalization of input data')
+                continue
+            else:
+                print('something went wrong with normalisation./n you are missing mean or std')
+
+    
 
             x = x.to(device)
             x_mask = x_mask.to(device)
@@ -323,27 +366,51 @@ def _get_example_specs(loader, model):
     print('getting min, max, mean and quartiles of losses...')
 
     idxs = []
+    labels = []
     for key, value in to_find.items():
         idx = (np.abs(losses - value)).argmin()
         idxs.append(idx)
+        labels.append(key)
 
     source_subset = Subset(loader.dataset, idxs)
     subset_loader = torch.utils.data.DataLoader(source_subset, batch_size=1, shuffle=False)
+    subset_loader.dataset.dataset.labels = labels
 
     return subset_loader
 
 def _predict_examples(subset_loader, model,):
 
+    labels = subset_loader.dataset.dataset.labels
+
+    train_mean = subset_loader.dataset.dataset.mean
+    train_std = subset_loader.dataset.dataset.std
+    # train_mean = None
+    # train_std = None
+
     output = {'recon' : [],
               'original' : [], 
               'mask' : [],
-              'loss' : []}
+              'loss' : [],
+              'label' : labels,
+              'mean': train_mean,
+              'std': train_std}
 
     print('predicting min, max, mean and quartiles...')
 
     model.eval()
     with torch.no_grad():
         for x, x_mask in subset_loader:
+
+            if train_mean is not None and train_std is not None:
+                # print('normalizing input data')
+                x = (x - train_mean) / train_std # normalize data
+                x = x * x_mask # to ensure instrument gap has 0 flux
+            elif train_mean is None and train_std is None:
+                # print('no normalization of input data')
+                continue
+            else:
+                print('something went wrong with normalisation./n you are missing mean or std')
+
 
             x = x.to(device)
             x_mask = x_mask.to(device)
@@ -393,21 +460,32 @@ def _plot_example_specs(output, l, ):
 
 def _draw_spec_pair(ax_fit, ax_res, output, i, l,):
     
-    recon = output['recon'][i]
-    og = output['original'][i]
+    mean = output['mean']
+    std = output['std']
 
-    resid = [x - y for x,y in zip(og, recon)]
+    recon = (np.array(output['recon'][i]) * std) + mean
+    og = (np.array(output['original'][i]) * std) + mean
+
+    mask = np.array(output['mask'][i])
+
+    resid = og - recon
+
+    recon[mask == 0] = np.nan
+    og[mask == 0] = np.nan
+    resid[mask == 0] = np.nan
 
     # Fit Panel
-    ax_fit.plot(l, og, color='black', alpha=0.7)
-    ax_fit.plot(l, recon, color='red', linewidth=1)
-    ax_fit.set_title(f"Loss: {output['loss'][i]:.5f}")
+    ax_fit.step(l, og, color='black', linewidth=2, alpha=0.7, where='mid', label='Original Spectrum')
+    ax_fit.step(l, recon, color='red', linewidth=1, where='mid', label='Reconstructed')
+    ax_fit.set_title(f"{output['label'][i]}, loss: {output['loss'][i]:.5f}")
     
     # Residual Panel
     ax_res.scatter(l, resid, color='gray') # residuals of standardized data
     ax_res.axhline(0, color='black', lw=0.8, ls=':')
 
-def plot_examples(loader, model, l, test_params, test=False):
+def plot_examples(loader, model, test_params, test=False):
+
+    l = loader.dataset.l
 
     subset_loader = _get_example_specs(loader, model)
 

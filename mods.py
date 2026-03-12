@@ -24,11 +24,11 @@ class H5SpecDataset(torch.utils.data.Dataset):
         self.flux_type = flux_type
 
         with h5py.File(self.data_path, 'r') as hf:
+            self.l = hf.attrs['wavelengths'][:]
+            self.mean = hf.attrs['train_mean']
+            self.std = hf.attrs['train_std']
             self.len = hf[self.split][self.flux_type].shape[0]
-            # print(self.len)
-            # print(len(hf[self.split][self.flux_type]))
             self.n_pixels = hf[self.split][self.flux_type].shape[1]
-            # print(self.n_pixels)
 
     def __len__(self):
 
@@ -95,33 +95,33 @@ class StandardAutoencoder(nn.Module):
 
     def forward(self, x):
 
-        print(x.shape)
+        # print(x.shape)
         # x = torch.relu(self.input_to_encoder(x))
         x = self.act_func(self.input_to_encoder(x))
 
-        print(x.shape)
+        # print(x.shape)
 
         for l in self.encoder_layers:
             # x = torch.relu(l(x))
             x = self.act_func(l(x))
-            print(x.shape)
+            # print(x.shape)
 
         # z = torch.relu(self.encoder_to_latent(x))
         z = self.act_func(self.encoder_to_latent(x))
-        print(z.shape)
+        # print(z.shape)
 
         # z = torch.relu(self.decoder_from_latent(z))
         z = self.act_func(self.decoder_from_latent(z))
-        print(z.shape)
+        # print(z.shape)
 
 
         for l in self.decoder_layers:
             # z = torch.relu(l(z))
             z = self.act_func(l(z))
-            print(z.shape)
+            # print(z.shape)
 
         x_hat = self.decoder_to_output(z)
-        print(x_hat.shape)
+        # print(x_hat.shape)
 
         return x_hat, None, None
 
