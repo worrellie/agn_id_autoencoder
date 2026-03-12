@@ -42,4 +42,6 @@ test_processed_z09_z08_normalized_noisy/
 
 *.h5
 
+RUN_*/
+
 Rapport_Gaétane_MAISSA_compressed.pdf

@@ -72,6 +72,8 @@ class StandardAutoencoder(nn.Module):
         self.encoder_layers = nn.ModuleList()
         self.decoder_layers = nn.ModuleList()
 
+        self.type = 'sae'
+
         self.input_to_encoder = nn.Linear(input_size, config[0]['in'])
 
         # add encoder layers
@@ -130,6 +132,8 @@ class VAEAutoencoder(nn.Module):
 
     def __init__(self, config, input_size, latent_size, activation = 'ReLU'):
         super(VAEAutoencoder, self).__init__()
+
+        self.type = 'vae'
 
         self.act_func = getattr(nn, activation)() # make instance of desired activation function
 
