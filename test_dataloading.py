@@ -88,6 +88,6 @@ torch.cuda.empty_cache()
 model, model_losses = funcs.train_ae(EPOCHS, train_loader, valid_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = True, )
 
 
-funcs.plot_loss(model_losses, test_params['test_name'], test=TESTING)
+funcs.plot_loss(model_losses, test_params['test name'], test=TESTING)
 
 funcs.plot_examples(train_loader, model, test_params, test = TESTING)
