@@ -28,7 +28,9 @@ def plot_random_fits_tables(folder_path, num_files=5):
             
             # Get column names (assuming there are at least 2)
             cols = t.colnames
+            print(cols)
             x_col, y_col = cols[0], cols[1]
+            print(t[x_col], t[y_col])
             
             # 4. Plotting
             axes[i].plot(t[x_col], t[y_col], linestyle='-', alpha=0.7)
@@ -45,5 +47,5 @@ def plot_random_fits_tables(folder_path, num_files=5):
     plt.show()
 
 # Usage:
-plot_random_fits_tables('merged_z09_v3-001')
-plot_random_fits_tables('merged_z09_v3-001_noiseless')
+plot_random_fits_tables('test_processed_z09_z08_normalized_noisy')
+# plot_random_fits_tables('merged_z09_v3-001_noiseless')

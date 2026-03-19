@@ -18,7 +18,7 @@ import mods
 
 # Load data
 
-DATA = "all_spectra_normalized.h5"
+DATA = "test_all_spectra_normalized.h5"
 
 train = mods.H5SpecDataset(DATA)
 valid = mods.H5SpecDataset(DATA, split = "validation")

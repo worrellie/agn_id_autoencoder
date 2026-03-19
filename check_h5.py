@@ -62,7 +62,6 @@ def check_h5_samples(h5_path, flux_type='normalized_flux'):
         plt.tight_layout()
         plt.show()
 
-#############################################################
 
 def print_h5_structure(name, obj):
     """Recursive function to print group and dataset info."""
