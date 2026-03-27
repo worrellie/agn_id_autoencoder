@@ -78,9 +78,57 @@ def get_common_grid(input_dir, exps = [1, 2, 4, 8]):
 
     return common_grid, valid_file_triplets
 
+def get_channels( valid_file_triplets, norm, output_dir):
+
+    resampler = FluxConservingResampler()
+
+    # for each object
+    for ri_p, yj_p, h_p, redshift in valid_file_triplets:
+
+        base_name = os.path.basename(ri_p).replace('_RI.fits', '')
+        
+        # for each channel
+        specs = []
+        for p in [ri_p, yj_p, h_p]:
+            with fits.open(p) as hdul:
+                flux = hdul[t].data * u.Unit('erg cm-2 s-1 AA-1')
+                wav = hdul[9].data
+
+                # dw = np.median(np.diff(wav)) # pixel width
+                
+                # padded_wav = np.concatenate([[wav[0] - dw], wav, [wav[-1] + dw]])
+                # padded_flux = np.concatenate([[0.0], flux, [0.0]])
+
+                # dummy_flux = np.array([1] * len(wav)) * u.Unit('count')
+
+                print(min(wav), max(wav))
+                
+                grid = np.arange(min(wav), max(wav), 4.0) * u.AA # ceil and floor??
+
+                # dummy_spec = Spectrum(dummy_flux, wav * u.AA)
+                # rebinned_dummy = resampler(dummy_spec, grid)
+                # print(min(rebinned_dummy.spectral_axis), max(rebinned_dummy.spectral_axis))
+                
+                spec = Spectrum(flux, wav * u.AA)
+                rebinned_spec = resampler(spec, grid)
+                print(min(rebinned_spec.spectral_axis), max(rebinned_spec.spectral_axis))
+
+                specs.append(rebinned_spec)
+                print(rebinned_spec)
+        
+            exit()
+
+
+
+        #                 final_lambda = final_lambda * u.AA
+        # final_flux = final_flux * u.Unit('erg cm-2 s-1 AA-1')
+
+
+
 def deredshift_and_resample(common_grid, valid_file_triplets, norm, output_dir):
 
     resampler = FluxConservingResampler()
+    
 
     i = 0
     # for each channel of each file
@@ -99,7 +147,9 @@ def deredshift_and_resample(common_grid, valid_file_triplets, norm, output_dir):
                 combined_lambda.append(wav)
                 combined_flux.append(flux)
                 bounds.append((wav.min(), wav.max()))
+        # print(bounds)
 
+        ######################################################################
         # get mask from first spec only (so it is uniform)
         # (it should be th same everywhere anyway but por si las moscas)
         if i == 0:
@@ -112,8 +162,9 @@ def deredshift_and_resample(common_grid, valid_file_triplets, norm, output_dir):
         combined_flux.append(instrument_flux)
 
         # sort flux according to lambda 
-        final_lambda = np.concatenate(combined_lambda) 
+        final_lambda = np.concatenate(combined_lambda)
         final_flux = np.concatenate(combined_flux)
+        #####
         sort_idx = np.argsort(final_lambda)
         final_lambda = final_lambda[sort_idx]
         final_flux = final_flux[sort_idx]
@@ -121,15 +172,41 @@ def deredshift_and_resample(common_grid, valid_file_triplets, norm, output_dir):
         # get mask where instrument gap is (true where masking)
         instrument_mask = np.isnan(final_flux)
 
-        # unit
+        # units
         final_lambda = final_lambda * u.AA
         final_flux = final_flux * u.Unit('erg cm-2 s-1 AA-1')
 
         spec_rest = Spectrum(
-            spectral_axis=1.8*final_lambda/(1+redshift),
+            spectral_axis=1.8*final_lambda/(1+redshift), # this should be fine because spectral axis object is bin edges (or centres..)
             flux=final_flux,
             mask = instrument_mask,
         )
+
+        # spec_rest = Spectrum(
+        #     spectral_axis=1.8*final_lambda/(1+redshift),
+        #     flux=final_flux,
+        # )
+
+        spec_rest.plot()
+        plt.show()
+
+        # print(final_lambda)
+        # print(len(final_lambda))
+        # print(common_grid)
+        # print(len(common_grid))
+
+        print(len(final_lambda[instrument_mask]))
+        spec_axis = 1.8*final_lambda/(1+redshift)
+
+        pre_mask = min(spec_axis[instrument_mask])
+        print(pre_mask)
+        post_mask = max(spec_axis[instrument_mask])
+        print(post_mask)
+
+        mask_min(list(common_grid).index(min(common_grid, key=lambda x: abs(x - pre_mask))))
+        mask_max(list(common_grid).index(min(common_grid, key=lambda x: abs(x - post_mask))))
+
+        exit()
 
         # rebin to common grid
         rebinned_spec = resampler(spec_rest, common_grid)
@@ -433,6 +510,8 @@ h5_filename = 'test_all_spectra.h5'
 #####################################
 
 common_grid, valid_file_triplets = get_common_grid(input_dir)
+
+# get_channels(valid_file_triplets, norm, output_dir)
 
 deredshift_and_resample(common_grid, valid_file_triplets, norm, output_dir)
 
