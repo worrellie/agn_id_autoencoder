@@ -133,12 +133,11 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stoppin
         for x, x_mask in train_loader:
 
             if train_mean is not None and train_std is not None:
-                # print('normalizing input data')
+                print('normalizing input data')
                 x = (x - train_mean) / train_std # normalize data
                 x = x * x_mask # to ensure instrument gap has 0 flux
             elif train_mean is None and train_std is None:
-                # print('no normalization of input data')
-                continue
+                print('no normalization of input data')
             else:
                 print('something went wrong with normalisation./n you are missing mean or std')
 
@@ -243,9 +242,14 @@ def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stoppin
                     print(f'Early Stopping: epoch {epoch}')
                     print('---------------------------------')
                     break
+                
+
 
         
-    print('training finished')
+    print('training finished, model saved')
+    # # when at end of training, save
+    # save_path = path.Path(test_name, f"{test_name}.pt") # overwrite is default
+    # torch.save(model.state_dict(), save_path)
 
     model_losses = {
         'beta': beta,
@@ -493,7 +497,7 @@ def plot_examples(loader, model, test_params, test=False):
 
     fig = _plot_example_specs(output, l, )
 
-    fig.suptitle(f"latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['epochs']}")
+    fig.suptitle(f"latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['max_epochs']}")
 
     if not test:
         pth = path.Path(test_params['test_name'], f"{test_params['test_name']}.png")

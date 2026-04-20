@@ -18,20 +18,37 @@ import mods
 
 # Load data
 
-DATA = "test_all_spectra_normalized.h5"
+DATA = "test_all_spectra.h5"
 
-train = mods.H5SpecDataset(DATA)
+train = mods.H5SpecDataset(DATA, split = "train")
 valid = mods.H5SpecDataset(DATA, split = "validation")
 test = mods.H5SpecDataset(DATA, split = "test")
+
+# # 
+# import time
+
+# for nw in [0, 2, 4, 8, 12]:
+#     train_loader = torch.utils.data.DataLoader(train, batch_size=64, num_workers=nw)
+#     start = time.time()
+    
+#     for i, data in enumerate(train_loader):
+#         if i > 10: break  # Just test the first few batches
+        
+#     end = time.time()
+#     print(f"num_workers: {nw} | Time per 10 batches: {end - start:.4f}s")
+# # 
 
 train_loader = torch.utils.data.DataLoader(train, batch_size = 2, shuffle = True, num_workers = 0)
 valid_loader = torch.utils.data.DataLoader(valid, batch_size = 1, shuffle = False,)
 test_loader = torch.utils.data.DataLoader(test, batch_size = 1, shuffle = False,)
+
 #################################################################################################
 
 ###############
 ###############
 TESTING = False
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 ###############
 ###############
 
@@ -52,22 +69,22 @@ WEIGHT_DECAY = 1e-8
 #####################################
 ############# make model ############
 #####################################
-model = mods.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
+model = mods.VAEAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
 #####################################
 
 TEST_NAME = f'RUN_{model.type}_nl{len(CONFIG)}_ls{LATENT_SIZE}_e{EPOCHS}_{ACTIVATION_FUNCTION}_B{BETA}_lr{LEARNING_RATE:.0e}_wd{WEIGHT_DECAY}_es{EARLY_STOPPING}'
 
 test_params = {
-    'test name': TEST_NAME,
-    'data file': DATA,
-    'ae type' : model.type,
+    'test_name': TEST_NAME,
+    'data_file': DATA,
+    'ae_type' : model.type,
     'config' : CONFIG,
-    'latent size' : LATENT_SIZE,
-    'activation function' : ACTIVATION_FUNCTION,
-    'max epochs' : EPOCHS,
+    'latent_size' : LATENT_SIZE,
+    'activation_function' : ACTIVATION_FUNCTION,
+    'max_epochs' : EPOCHS,
     'beta' : BETA,
-    'learn rate' : LEARNING_RATE,
-    'weight decay' : WEIGHT_DECAY
+    'learn_rate' : LEARNING_RATE,
+    'weight_decay' : WEIGHT_DECAY
 }
 
 funcs.save_test_params(test_params, TEST_NAME, test=TESTING)
@@ -85,9 +102,16 @@ optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT
 
 # train
 torch.cuda.empty_cache()
-model, model_losses = funcs.train_ae(EPOCHS, train_loader, valid_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = True, )
+# model, model_losses = funcs.train_ae(EPOCHS, train_loader, valid_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = True, )
 
 
-funcs.plot_loss(model_losses, test_params['test name'], test=TESTING)
+trainer = mods.Trainer(device, TEST_NAME, model, optimizer, early_stopping, BETA)
+model, model_losses = trainer.train_ae(EPOCHS, train_loader, valid_loader = valid_loader, verbose = True)
+
+funcs.plot_loss(model_losses, test_params['test_name'], test=TESTING)
 
 funcs.plot_examples(train_loader, model, test_params, test = TESTING)
+
+# then get TEST DATA results for analysis
+# reconstruction loss, min, max, mean, median
+# reconstruction loss histogram

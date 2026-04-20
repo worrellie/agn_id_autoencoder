@@ -18,7 +18,7 @@ import mods
 
 class H5SpecDataset(torch.utils.data.Dataset):
 
-    def __init__(self, data_path, split = 'train', flux_type = 'normalized_flux'):
+    def __init__(self, data_path, split, flux_type = 'raw_flux'):
         self.data_path = data_path
         self.split = split
         self.flux_type = flux_type
@@ -29,21 +29,26 @@ class H5SpecDataset(torch.utils.data.Dataset):
             self.std = hf.attrs['train_std']
             self.len = hf[self.split][self.flux_type].shape[0]
             self.n_pixels = hf[self.split][self.flux_type].shape[1]
+        
+        self.hf = None
 
     def __len__(self):
 
         return self.len
     
     def __getitem__(self, idx):
-        with h5py.File(self.data_path, 'r') as hf:
-            sample = torch.from_numpy(hf[self.split][self.flux_type][idx])
-            sample_mask = sample != 0
+        
+        if self.hf is None:
+            self.hf = h5py.File(self.data_path, 'r')
 
-            # make sure sample is float32 (best for Pytorch, also I think what is in the h5)
-            sample = sample.float()
-            sample_mask = sample_mask.bool()
+        sample = torch.from_numpy(self.hf[self.split][self.flux_type][idx])
+        sample_mask = sample != 0
 
-            return sample, sample_mask
+        # make sure sample is float32 (best for Pytorch, also I think what is in the h5)
+        sample = sample.float()
+        sample_mask = sample_mask.bool()
+
+        return sample, sample_mask
 
 
 class SpecDataset(torch.utils.data.Dataset):
@@ -208,91 +213,91 @@ class VAEAutoencoder(nn.Module):
 
 ################## autoencoder #####################
 
-class CNNAutoencoder(nn.Module):
+# class CNNAutoencoder(nn.Module):
 
-    def __init__(self, config, input_size, latent_size):
-        super(CNNAutoencoder, self).__init__()
+#     def __init__(self, config, input_size, latent_size):
+#         super(CNNAutoencoder, self).__init__()
 
-        self.encoder_layers = nn.ModuleList()
-        self.decoder_layers = nn.ModuleList()
+#         self.encoder_layers = nn.ModuleList()
+#         self.decoder_layers = nn.ModuleList()
 
-        # add encoder layers
-        for c in config:
-            self.encoder_layers.append(
-                nn.Conv1d(c['in'], c['out'], c['kernel'], 
-                          stride=c['stride'], padding=c['padding'])
-            )
+#         # add encoder layers
+#         for c in config:
+#             self.encoder_layers.append(
+#                 nn.Conv1d(c['in'], c['out'], c['kernel'], 
+#                           stride=c['stride'], padding=c['padding'])
+#             )
 
-        self.flat_size, self.last_chans, self.last_width = self._get_flattened_size(input_size)
+#         self.flat_size, self.last_chans, self.last_width = self._get_flattened_size(input_size)
 
-        # add latent layers
-        self.encoder_to_latent_mean = nn.Linear(self.flat_size, latent_size)
-        self.encoder_to_latent_logvar = nn.Linear(self.flat_size, latent_size)
-        self.decoder_from_latent = nn.Linear(latent_size, self.flat_size)
+#         # add latent layers
+#         self.encoder_to_latent_mean = nn.Linear(self.flat_size, latent_size)
+#         self.encoder_to_latent_logvar = nn.Linear(self.flat_size, latent_size)
+#         self.decoder_from_latent = nn.Linear(latent_size, self.flat_size)
 
-        # add decoder layers
-        for c in reversed(config):
-            self.decoder_layers.append(
-                nn.ConvTranspose1d(c['out'], c['in'], c['kernel'], 
-                          stride=c['stride'], padding=c['padding'])
-            )
+#         # add decoder layers
+#         for c in reversed(config):
+#             self.decoder_layers.append(
+#                 nn.ConvTranspose1d(c['out'], c['in'], c['kernel'], 
+#                           stride=c['stride'], padding=c['padding'])
+#             )
 
-    ###### this is cool- remember for future
-    def _get_flattened_size(self, input_size):
+#     ###### this is cool- remember for future
+#     def _get_flattened_size(self, input_size):
         
-        with torch.no_grad(): # do not update weights
+#         with torch.no_grad(): # do not update weights
             
-            dummy_x = torch.zeros(1, 1, input_size)
-            for l in self.encoder_layers:
-                dummy_x = l(dummy_x) # updates the dummy shape based on the encoder layers
+#             dummy_x = torch.zeros(1, 1, input_size)
+#             for l in self.encoder_layers:
+#                 dummy_x = l(dummy_x) # updates the dummy shape based on the encoder layers
             
-            return dummy_x.numel(), dummy_x.shape[1], dummy_x.shape[2]
-    ######
+#             return dummy_x.numel(), dummy_x.shape[1], dummy_x.shape[2]
+#     ######
 
-    def forward(self, x):
+#     def forward(self, x):
 
-        x_shapes_encoder = []
-        x_chans_encoder = []
-        x = x.unsqueeze(1) # add channel dimension
-        for l in self.encoder_layers:
-            x = torch.relu(l(x))
-            # print(x.shape)
-            x_shapes_encoder.append(x.shape[-1])
-            x_chans_encoder.append(x.shape[-2])
+#         x_shapes_encoder = []
+#         x_chans_encoder = []
+#         x = x.unsqueeze(1) # add channel dimension
+#         for l in self.encoder_layers:
+#             x = torch.relu(l(x))
+#             # print(x.shape)
+#             x_shapes_encoder.append(x.shape[-1])
+#             x_chans_encoder.append(x.shape[-2])
 
-        x = torch.flatten(x, start_dim = 1)
-        # flat = x.shape[1]
-        # print((f'flat: {flat}'))
-        # print(x.shape)
+#         x = torch.flatten(x, start_dim = 1)
+#         # flat = x.shape[1]
+#         # print((f'flat: {flat}'))
+#         # print(x.shape)
 
-        mu = torch.relu(self.encoder_to_latent_mean(x))
-        logvar = torch.relu(self.encoder_to_latent_logvar(x))
-        # print(mu.shape)
-        # print(logvar.shape)
+#         mu = torch.relu(self.encoder_to_latent_mean(x))
+#         logvar = torch.relu(self.encoder_to_latent_logvar(x))
+#         # print(mu.shape)
+#         # print(logvar.shape)
 
-        # epsilon = torch.randn_like(logvar).to(device)
-        epsilon = torch.randn_like(logvar)
-        z = mu + logvar*epsilon # latent of VAE
-        # print(z.shape)
+#         # epsilon = torch.randn_like(logvar).to(device)
+#         epsilon = torch.randn_like(logvar)
+#         z = mu + logvar*epsilon # latent of VAE
+#         # print(z.shape)
 
-        # print(x_shapes_encoder)
+#         # print(x_shapes_encoder)
 
-        # self.decoder_from_latent = nn.LazyLinear(flat).to(device)
-        # self.decoder_from_latent = nn.LazyLinear(flat)
-        z = torch.relu(self.decoder_from_latent(z))
-        # print(z.shape)
+#         # self.decoder_from_latent = nn.LazyLinear(flat).to(device)
+#         # self.decoder_from_latent = nn.LazyLinear(flat)
+#         z = torch.relu(self.decoder_from_latent(z))
+#         # print(z.shape)
 
-        z = z.view(-1, x_chans_encoder[-1], x_shapes_encoder[-1]) # reshape for decoder
-        # print(z.shape)
+#         z = z.view(-1, x_chans_encoder[-1], x_shapes_encoder[-1]) # reshape for decoder
+#         # print(z.shape)
 
 
-        for l in self.decoder_layers:
-            z = torch.relu(l(z))
-            # print(z.shape)
+#         for l in self.decoder_layers:
+#             z = torch.relu(l(z))
+#             # print(z.shape)
 
-        x_hat = z.squeeze(1) # remove (now defunct) channel dimension
+#         x_hat = z.squeeze(1) # remove (now defunct) channel dimension
 
-        return x_hat, mu, logvar
+#         return x_hat, mu, logvar
 
 # class LoadData:
 
@@ -424,3 +429,227 @@ class CustomEarlyStopping:
                 self.stop_training = True
                 if self.verbose:
                     print('Stopping Early')
+
+class Trainer:
+
+    def __init__(self, device, test_name, model, optimizer, early_stopping, beta):
+
+        self.device = device
+
+        self.test_name = test_name
+        self.model = model
+        self.optimizer = optimizer
+        self.early_stopping = early_stopping
+        self.beta = beta
+        if self.beta == 0 and self.model.type == 'vae':
+            print('warning: beta is 0 for your VAE')
+        
+    def train_ae(self, epochs, train_loader, valid_loader = None, verbose = False):
+
+        train_mean = train_loader.dataset.mean
+        train_std = train_loader.dataset.std
+
+        self.model.to(self.device)
+
+        train_losses = []
+        train_mses = []
+        train_kls = []
+        valid_losses = []
+        valid_mses = []
+        valid_kls = []
+
+        print('training model...')
+    
+        for epoch in range(epochs):
+
+            self.model.train()
+            train_loss = 0
+            train_mse = 0
+            train_kl = 0
+            valid_loss = 0
+            valid_mse = 0
+            valid_kl = 0
+
+            processed_samples = 0
+
+            for x, x_mask in train_loader:
+
+                if train_mean is not None and train_std is not None:
+                    print('normalizing input data')
+                    x = (x - train_mean) / train_std # normalize data
+                    x = x * x_mask # to ensure instrument gap has 0 flux
+                elif train_mean is None and train_std is None:
+                    print('no normalization of input data')
+                else:
+                    print('something went wrong with normalisation./n you are missing mean or std')
+
+                x = x.to(self.device)
+                x_mask = x_mask.to(self.device)
+
+                x_hat, mu, logvar = self.model(x) # batch prediction
+
+                # stats for *batch*
+                mse, kl, loss = self._loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = self.beta) # 'mean' gives loss per sample for batch
+
+                self.optimizer.zero_grad()
+
+                loss.backward()
+
+                train_mse += mse.item() * x.size(0) # reconstruction loss per sample 
+                # (mse.item is batch mean therefore need to multiply by number in batch
+                # and later divide by number of samples)
+                train_kl += kl.item() * x.size(0) # kl divergence
+                # train_w_kls += w_kl.item() / x.size(0) # weighted kl divergence
+
+                train_loss += loss.item() * x.size(0) # total loss
+
+                self.optimizer.step()
+
+                # in case drop_last is True, divide my number used, rather than dataset size
+                processed_samples += x.size(0)
+
+            epoch_avg_mse = train_mse / processed_samples
+            train_mses.append(epoch_avg_mse)
+            epoch_avg_kl = train_kl / processed_samples
+            train_kls.append(epoch_avg_kl)
+
+            epoch_avg_loss = train_loss / processed_samples # average loss per sample 
+            train_losses.append(epoch_avg_loss) # losses for each epoch
+
+            if verbose:
+                print('-------------------------------------------')
+                print(f'training: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_loss:.10f},\nmse: {epoch_avg_mse:.10f},\nkl: {epoch_avg_kl:e}')
+                
+
+            self.model.eval()
+            if valid_loader is not None:
+
+                with torch.no_grad():
+
+                    processed_samples_valid = 0 
+
+                    for x, x_mask in valid_loader:
+                        if train_mean is not None and train_std is not None:
+                            x = (x - train_mean) / train_std # normalize data
+                            x = x * x_mask # to ensure instrument gap has 0 flux
+                        elif train_mean is None and train_std is None:
+                            continue
+                        else:
+                            print('something went wrong with normalisation./n you are missing mean or std')
+
+                        x = x.to(self.device)
+                        x_mask = x_mask.to(self.device)
+
+                        x_hat, mu, logvar = self.model(x)
+
+                        mse, kl, loss = self._loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = self.beta) # 'mean' gives loss per sample for batch
+
+                        valid_mse += mse.item() * x.size(0) # reconstruction loss
+                        valid_kl += kl.item() * x.size(0) # kl divergence
+                        # valid_w_kls += w_kl.item() / x.size(0) # weighted kl divergence
+
+                        valid_loss += loss.item() * x.size(0)
+
+                    # valid_samples = len(valid_loader.dataset)
+
+                        processed_samples_valid += x.size(0)
+
+                    epoch_avg_valid_mse = valid_mse / processed_samples_valid
+                    valid_mses.append(epoch_avg_valid_mse)
+                    epoch_avg_valid_kl = valid_kl / processed_samples_valid
+                    valid_kls.append(epoch_avg_valid_kl)
+                    
+                    epoch_avg_valid_loss = valid_loss / processed_samples_valid
+                    valid_losses.append(epoch_avg_valid_loss)
+
+                if verbose:
+                    print(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
+
+                if self.early_stopping is not None:
+                    self.early_stopping.check_early_stop(epoch_avg_valid_loss, self.model, epoch)
+
+                    if self.early_stopping.stop_training:
+                        print('---------------------------------')
+                        print(f'Early Stopping: epoch {epoch}')
+                        print('---------------------------------')
+                        break
+            
+        print('training finished, model saved')
+        # when at end of training, save
+        save_path = path.Path(self.test_name, f"{self.test_name}.pt") # overwrite is default
+        torch.save(self.model.state_dict(), save_path)
+
+        model_losses = {
+            'beta': self.beta,
+            'train_total': train_losses,
+            'train_mse': train_mses,
+            'train_kl_raw': train_kls,
+            'valid_total': valid_losses,
+            'valid_mse': valid_mses,
+            'valid_kl_raw': valid_kls,
+
+        }
+
+        return self.model, model_losses
+
+    def _loss_calc_batch(self, x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+
+        batch_size = x_hat.shape[0]
+        n_unmasked_pixels = x_mask.sum(dim=1)
+        
+        # pixel-wise
+        sq_err_per_element = (x_hat - x)**2
+
+        # apply masks
+        masked_sq_err = sq_err_per_element * x_mask
+
+        # mse per spec
+        masked_mse_per_sample =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
+
+        # mean mse for batch
+        mean_masked_mse_for_batch = masked_mse_per_sample.sum() / batch_size
+        # print(f'masked recon loss (mean for batch): {mean_masked_mse_for_batch}')
+
+        if mu is not None and logvar is not None: # (if is VAE)
+            # kl divs in latent space (one for each dim of latent space):
+            kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()) 
+            mean_kl_div_for_batch = kl_divs.sum() / batch_size
+            # print(f'mean_kl_div_for_batch: {mean_kl_div_for_batch}')
+        else:
+            mean_kl_div_for_batch = torch.tensor(0.0).to(x.self.device)
+        
+
+        recon_loss = mean_masked_mse_for_batch
+        kl_loss = mean_kl_div_for_batch
+
+        total_loss = recon_loss + (beta * kl_loss)
+
+        return recon_loss, kl_loss, total_loss
+
+    def _loss_calc_per_spec(self, x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+
+        batch_size = x_hat.shape[0]
+        n_unmasked_pixels = x_mask.sum(dim=1)
+        
+        # pixel-wise
+        sq_err_per_element = (x_hat - x)**2
+
+        # apply masks
+        masked_sq_err = sq_err_per_element * x_mask
+
+        # mse per spec
+        masked_mse_per_sample =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
+
+        # if mu is not None and logvar is not None: # (if is VAE)
+        #     # kl divs in latent space (one for each dim of latent space):
+        #     kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
+        # else:
+        #     mean_kl_div_for_batch = torch.tensor(0.0).to(x.device)
+        
+
+        recon_loss = masked_mse_per_sample
+        # kl_loss = mean_kl_div_for_batch
+
+        # total_loss = recon_loss + (beta * kl_loss)
+
+        return recon_loss

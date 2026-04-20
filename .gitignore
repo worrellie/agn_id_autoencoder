@@ -23,12 +23,11 @@ merged_z09_v3-001_linearly_scaled_noiseless_1h/
 merged_z09_v3-001_linearly_scaled_noiseless_8h/
 merged_z09_v3-001_linearly_scaled_noisy_1h/
 merged_z09_v3-001_linearly_scaled_noisy_8h/
-
+test_processed_z09_z08_noisy/
 merged_*/
 *_noisy/
 *_noiseless/
-test_*/
-
+other_code
 *.pt
 all_z09_tanh/
 all_z09_relu/

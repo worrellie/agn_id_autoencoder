@@ -136,7 +136,7 @@ def rebin_channel(flux, l, resampler, grid_size = 4.0):
     # print(min(rebinned_chan.spectral_axis), max(rebinned_chan.spectral_axis))
     # print(rebinned_chan.flux.value, rebinned_chan.spectral_axis.value)
 
-    return [rebinned_chan.flux.value, rebinned_chan.spectral_axis.value]
+    return rebinned_chan.flux.value, rebinned_chan.spectral_axis.value
 
 def merge_channels(channel_pairs, grid_size):
     # combines all 3 channels and MASKS potentially questionable pixels with 0
@@ -227,10 +227,13 @@ def plot_spec(flux, l, z, original = None, templ = None):
     plt.title(f"z_obsv = {redshift}")
     plt.show()
 
-def _calc_noise(flux, l):
+def calc_SNR(flux, l):
+
+    flux = np.asarray(flux)
+    l = np.asarray(l)
 
     # check that 5100 to 5800 is in rest frame l
-    target_mask = (l >=5100) & (l <= 5800) &(flux!=0)
+    target_mask = (l >=5100) & (l <= 5800) & (flux!=0)
 
     assert len(flux) == len(target_mask)
 
@@ -238,28 +241,25 @@ def _calc_noise(flux, l):
     # print(len(target_flux))
     
     noise = np.std(target_flux)
+    mean_flux = np.mean(target_flux)
 
-    return noise
+    snr = mean_flux/noise
+    print('snr', snr)
 
-def calc_SNR(flux, l):
+    return mean_flux, noise, snr
 
-    noise = _calc_noise(flux, l)
 
-    snrs = flux / noise
-
-    return np.mean(snrs)
-
-def save_spec(flux, l, original_z, infile_base, outdir, norm=False):
+def save_spec(flux, l, original_z, snr, norm_factor, infile_base, outdir, ):
 
     col1 = fits.Column(name='lambda', format='D', array=l)
     col2 = fits.Column(name='flux', format='D', array=flux)
 
     hdr = fits.Header()
     hdr['OG_Z'] = original_z
-    hdr['SNR'] = calc_SNR(flux, l)
+    hdr['SNR'] = snr
     hdr['ORIGINAL'] = base_name
-    if norm:
-        hdr['NORMFAC'] = norm_factor
+    # NORMFAC is not applied here, only when saving to h5 file
+    hdr['NORMFAC'] = norm_factor 
     
     hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
     
@@ -309,12 +309,14 @@ def save_h5(files, train_files, valid_files, test_files):
             
             group = hf.create_group(split_name)
             
-            # Datasets using float64 (f8) for high precision as requested
-            # We now create TWO flux datasets: raw and normalized
-            if norm:
-                d_flux_norm = group.create_dataset('normalized_flux', (n_samples, n_pixels), 
+            # # Datasets using float64 (f8) for high precision as requested
+            # # We now create TWO flux datasets: raw and normalized
+            # if norm:
+            #     d_flux_norm = group.create_dataset('normalized_flux', (n_samples, n_pixels), 
+            #                                     dtype='f8', compression='gzip', chunks=True)
+            #     d_norm_fac = group.create_dataset('norm_factor', (n_samples,), dtype='f8')
+            d_flux_norm = group.create_dataset('normalized_flux', (n_samples, n_pixels), 
                                                 dtype='f8', compression='gzip', chunks=True)
-                d_norm_fac = group.create_dataset('norm_factor', (n_samples,), dtype='f8')
 
             d_flux_raw  = group.create_dataset('raw_flux', (n_samples, n_pixels), 
                                               dtype='f8', compression='gzip', chunks=True)
@@ -335,20 +337,23 @@ def save_h5(files, train_files, valid_files, test_files):
                         current_flux = hdul[1].data['flux'].astype(np.float64)
                         redshift = hdul[1].header.get('OG_Z', 0.0)
                         snr = hdul[1].header.get('SNR', 0.0)
-                        if norm:
-                            norm_factor = hdul[0].header.get('NORMFAC', 1.0)
-                            d_flux_norm[i] = current_flux
-                            d_norm_fac[i] = norm_factor
+                        norm_factor = hdul[1].header.get('NORMFAC', 0.0)
+                        # print(norm_factor)
+                        # if norm:
+                        #     norm_factor = hdul[0].header.get('NORMFAC', 1.0)
+                        #     d_flux_norm[i] = current_flux
+                        #     d_norm_fac[i] = norm_factor
 
                         d_z[i] = redshift
                         d_snr[i] = snr
                         d_ids[i] = os.path.basename(f).encode('utf-8')
                         
                         # If you want to store the "raw" physical flux, we multiply back
-                        if norm:
-                            d_flux_raw[i] = current_flux * norm_factor
-                        else: 
-                            d_flux_raw[i] = current_flux 
+                        # if norm:
+                        #     d_flux_raw[i] = current_flux * norm_factor
+                        # else: 
+                        d_flux_raw[i] = current_flux 
+                        d_flux_norm[i] = current_flux/norm_factor
                 
                 except Exception as e:
                     print(f"Skipping {f} due to error: {e}")
@@ -361,12 +366,7 @@ def save_h5(files, train_files, valid_files, test_files):
 def check_h5_samples(h5_path, norm):
     """
     Checks random samples from the H5 file.
-    flux_type: 'normalized_flux' or 'raw_flux'
     """
-    if norm:
-        flux_type='normalized_flux'
-    else:
-        flux_type='raw_flux'
 
     with h5py.File(h5_path, 'r') as hf:
         # 1. Access the wavelength grid from the root attributes
@@ -386,31 +386,32 @@ def check_h5_samples(h5_path, norm):
                 continue
                 
             # Access the chosen flux dataset
-            dset = hf[split][flux_type]
-            n_samples = dset.shape[0]
+            dset_raw = hf[split]['raw_flux']
+            dset_norm = hf[split]['normalized_flux']
+            n_samples = dset_raw.shape[0]
             
             # 3. Pick a random index
             rand_idx = random.randint(0, n_samples - 1)
             
             # 4. Load the data
-            flux = dset[rand_idx]
+            flux = dset_raw[rand_idx]
+            norm_flux = dset_norm[rand_idx]
             z = hf[split]['redshift'][rand_idx]
             obj_id = hf[split]['obj_id'][rand_idx].decode('utf-8')
-            if norm:
-                norm_fac = hf[split]['norm_factor'][rand_idx]
             
             # Print to console for manual zero-check in the gaps
             print(f"--- {split.upper()} (Index {rand_idx}) ---")
-            if norm:
-                print(f"ID: {obj_id}, Norm Factor: {norm_fac:.4e}")
-            else:
-                print(f"ID: {obj_id}")
+            print(f"ID: {obj_id}")
             # print(flux) # Uncomment if you want the full array in console
             
             # 5. Plotting
-            axes[i].step(wave, flux, where='mid', color='midnightblue', lw=0.8)
-            axes[i].set_title(f"Split: {split.upper()} | ID: {obj_id} | z: {z:.4f} | Type: {flux_type}")
-            axes[i].set_ylabel("Normalized Flux" if 'norm' in flux_type else "Raw Flux")
+            if norm:
+                axes[i].step(wave, norm_flux, where='mid', color='green', lw=0.8)
+                axes[i].set_title(f"Split: {split.upper()} | ID: {obj_id} | z: {z:.4f} (normalized spec)")
+            else:
+                axes[i].step(wave, flux, where='mid', color='midnightblue', lw=0.8)
+                axes[i].set_title(f"Split: {split.upper()} | ID: {obj_id} | z: {z:.4f} ")
+            axes[i].set_ylabel("Flux")
             axes[i].grid(alpha=0.3)
             
             # Highlight zeros (gaps) for visual confirmation
@@ -419,7 +420,7 @@ def check_h5_samples(h5_path, norm):
             if len(gaps) > 0:
                 axes[i].plot(wave[gaps], flux[gaps], 'r|', markersize=2, alpha=0.3, label='Zero-Gap')
 
-        axes[2].set_xlabel(f"Rest-frame Wavelength ($\AA$)")
+        axes[2].set_xlabel(f"Wavelength ($\AA$)")
         plt.tight_layout()
         plt.show()
 
@@ -463,13 +464,12 @@ def compute_and_save_stats(h5_path):
 # input_dir = r'/test_data_for_processing' linux
 input_dir = r'test_data_for_processing'
 t = 1  # 1: noisy, 4: template
-norm = False # whether to normalize spectra
 exps = [1, 2, 4, 8]
 
 # Define output directory
-normalised = "norm_" if norm else ""
+# normalised = "norm_" if norm else ""
 noise_type = "noisy" if t == 1 else "noiseless"
-output_dir = f'test_processed_z09_z08_{normalised}{noise_type}'
+output_dir = f'test_processed_z09_z08_{noise_type}'
 
 os.makedirs(output_dir, exist_ok=True)
 
@@ -479,7 +479,7 @@ h5_filename = 'test_all_spectra.h5'
 
 grid_size = 4.0
 
-common_vals, valid_triplets = get_common_grid(input_dir)
+common_vals, valid_triplets = get_common_grid(input_dir, de_z = 0.8)
 
 resampler = FluxConservingResampler(extrapolation_treatment = 'truncate')
 
@@ -491,25 +491,34 @@ for ri_p, yj_p, h_p, redshift in valid_triplets:
     original_de_z_f_templ = []
     original_de_z_l = []
     channel_pairs = []
+
+    original_flux_rest = []
+    original_l_rest = []
     
     # get channel data
     for channel in [ri_p, yj_p, h_p]:
 
         flux, l, f_templ = get_channel_data(channel)
 
-        flux_de_z, l_de_z = deredshift_channel(flux, l, redshift)
-        f_templ_de_z, _ = deredshift_channel(f_templ, l, redshift)
+        flux_de_z, l_de_z = deredshift_channel(flux, l, redshift, de_z=0.8)
+        f_templ_de_z, _ = deredshift_channel(f_templ, l, redshift, de_z=0.8)
+        flux_rest, l_rest = deredshift_channel(flux, l, redshift, de_z=0.0)
 
         # original is *non-rebinned* spectrum
         original_de_z_flux.extend(flux_de_z)
         original_de_z_f_templ.extend(f_templ_de_z)
         original_de_z_l.extend(l_de_z)
 
-        # chan_pair is [flux, l] *rebinned*
-        chan_pair = rebin_channel(flux_de_z, l_de_z, resampler, grid_size = grid_size)
-        
+        original_flux_rest.extend(flux_rest)
+        original_l_rest.extend(l_rest)
+
+        f_rebinned, l_rebinned = rebin_channel(flux_de_z, l_de_z, resampler, grid_size = grid_size)
         # channel_pairs is all chan_pairs for a full spectrum (3 sets of chan_pairs)
-        channel_pairs.append(chan_pair)
+        channel_pairs.append([f_rebinned, l_rebinned])
+
+    # calculate snr at 5100-5800A
+    mean_flux, noise, snr = calc_SNR(original_flux_rest, original_l_rest)
+    print(snr)
 
     # combine channels and plot
 
@@ -520,16 +529,15 @@ for ri_p, yj_p, h_p, redshift in valid_triplets:
     # *rebinned* spectrum (including 0 to 30000)
     spec_flux, spec_l = merge_channels(channel_pairs, grid_size = grid_size)
     # plot_spec(spec_flux, spec_l, redshift, original, templ = template)
-
-    print(calc_SNR(spec_flux, spec_l))
-
+    
     # crop spectrum to common wavelength range
     final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
 
     # plot_spec(final_spec_flux, final_spec_l, redshift, original)
 
     # save rebinned spec
-    save_spec(final_spec_flux, final_spec_l, redshift, base_name, output_dir)
+    save_spec(final_spec_flux, final_spec_l, redshift, snr, mean_flux, base_name, output_dir)
+
 
 # at this point, should have a folder of all the processed spectra
 test_size_TESTING = 0.5
@@ -550,6 +558,6 @@ with h5py.File(h5_filename, 'r') as hf:
     hf.visititems(check_h5_structure)
 print("/n---------------------------------------------/n")
 
-check_h5_samples(h5_filename, norm = False)
-# 
+# check_h5_samples(h5_filename, norm = False)
+# check_h5_samples(h5_filename, norm = True)
 
