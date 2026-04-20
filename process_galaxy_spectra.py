@@ -1,5 +1,7 @@
 RND = 42
 
+from joblib import Parallel, delayed
+import multiprocessing
 
 import glob
 import numpy as np
@@ -257,13 +259,13 @@ def save_spec(flux, l, original_z, snr, norm_factor, infile_base, outdir, ):
     hdr = fits.Header()
     hdr['OG_Z'] = original_z
     hdr['SNR'] = snr
-    hdr['ORIGINAL'] = base_name
+    hdr['ORIGINAL'] = infile_base
     # NORMFAC is not applied here, only when saving to h5 file
     hdr['NORMFAC'] = norm_factor 
     
     hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
     
-    out_name = f"{base_name}_{noise_type}_deZ_rebinned.fits"
+    out_name = f"{infile_base}_{noise_type}_deZ_rebinned.fits"
     
     hdu.writeto(os.path.join(output_dir, out_name), overwrite=True)
     
@@ -455,6 +457,38 @@ def compute_and_save_stats(h5_path):
         print(f"   Mean: {global_mean}")
         print(f"   Std:  {global_std}")
 
+def process_single_spec(triplet, common_vals, grid_size, output_dir, resampler):
+    
+    ri_p, yj_p, h_p, redshift = triplet
+    base_name = os.path.basename(ri_p).replace('_RI.fits', '')
+
+    original_de_z_flux, original_de_z_l = [], []
+    original_flux_rest, original_l_rest = [], []
+    channel_pairs = []
+
+    for channel in [ri_p, yj_p, h_p]:
+        flux, l, _ = get_channel_data(channel) # Assuming t=1 is hardcoded or passed
+        
+        flux_de_z, l_de_z = deredshift_channel(flux, l, redshift, de_z=0.8)
+        flux_rest, l_rest = deredshift_channel(flux, l, redshift, de_z=0.0)
+
+        original_de_z_flux.extend(flux_de_z)
+        original_de_z_l.extend(l_de_z)
+        original_flux_rest.extend(flux_rest)
+        original_l_rest.extend(l_rest)
+
+        f_rebinned, l_rebinned = rebin_channel(flux_de_z, l_de_z, resampler, grid_size=grid_size)
+        channel_pairs.append([f_rebinned, l_rebinned])
+
+    # SNR and Merging
+    _, _, snr = calc_SNR(np.asarray(original_flux_rest), np.asarray(original_l_rest))
+    spec_flux, spec_l = merge_channels(channel_pairs, grid_size=grid_size)
+    final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
+
+    # Save
+    save_spec(final_spec_flux, final_spec_l, redshift, snr, np.mean(final_spec_flux), base_name, output_dir)
+    return base_name # Useful for tracking progress
+
 ################
 ##### main #####
 ################
@@ -483,60 +517,70 @@ common_vals, valid_triplets = get_common_grid(input_dir, de_z = 0.8)
 
 resampler = FluxConservingResampler(extrapolation_treatment = 'truncate')
 
-for ri_p, yj_p, h_p, redshift in valid_triplets:
+num_cores = multiprocessing.cpu_count() - 1  # Leave one core for the OS
+print(f"🚀 Starting parallel processing on {num_cores} cores...")
 
-    base_name = os.path.basename(ri_p).replace('_RI.fits', '')
+results = Parallel(n_jobs=num_cores)(
+    delayed(process_single_spec)(triplet, common_vals, grid_size, output_dir, resampler) 
+    for triplet in valid_triplets
+)
 
-    original_de_z_flux = []
-    original_de_z_f_templ = []
-    original_de_z_l = []
-    channel_pairs = []
+# print(f"✅ Finished processing {len(results)} spectra.")
 
-    original_flux_rest = []
-    original_l_rest = []
+# for ri_p, yj_p, h_p, redshift in valid_triplets:
+
+#     base_name = os.path.basename(ri_p).replace('_RI.fits', '')
+
+#     original_de_z_flux = []
+#     original_de_z_f_templ = []
+#     original_de_z_l = []
+#     channel_pairs = []
+
+#     original_flux_rest = []
+#     original_l_rest = []
     
-    # get channel data
-    for channel in [ri_p, yj_p, h_p]:
+#     # get channel data
+#     for channel in [ri_p, yj_p, h_p]:
 
-        flux, l, f_templ = get_channel_data(channel)
+#         flux, l, f_templ = get_channel_data(channel)
 
-        flux_de_z, l_de_z = deredshift_channel(flux, l, redshift, de_z=0.8)
-        f_templ_de_z, _ = deredshift_channel(f_templ, l, redshift, de_z=0.8)
-        flux_rest, l_rest = deredshift_channel(flux, l, redshift, de_z=0.0)
+#         flux_de_z, l_de_z = deredshift_channel(flux, l, redshift, de_z=0.8)
+#         f_templ_de_z, _ = deredshift_channel(f_templ, l, redshift, de_z=0.8)
+#         flux_rest, l_rest = deredshift_channel(flux, l, redshift, de_z=0.0)
 
-        # original is *non-rebinned* spectrum
-        original_de_z_flux.extend(flux_de_z)
-        original_de_z_f_templ.extend(f_templ_de_z)
-        original_de_z_l.extend(l_de_z)
+#         # original is *non-rebinned* spectrum
+#         original_de_z_flux.extend(flux_de_z)
+#         original_de_z_f_templ.extend(f_templ_de_z)
+#         original_de_z_l.extend(l_de_z)
 
-        original_flux_rest.extend(flux_rest)
-        original_l_rest.extend(l_rest)
+#         original_flux_rest.extend(flux_rest)
+#         original_l_rest.extend(l_rest)
 
-        f_rebinned, l_rebinned = rebin_channel(flux_de_z, l_de_z, resampler, grid_size = grid_size)
-        # channel_pairs is all chan_pairs for a full spectrum (3 sets of chan_pairs)
-        channel_pairs.append([f_rebinned, l_rebinned])
+#         f_rebinned, l_rebinned = rebin_channel(flux_de_z, l_de_z, resampler, grid_size = grid_size)
+#         # channel_pairs is all chan_pairs for a full spectrum (3 sets of chan_pairs)
+#         channel_pairs.append([f_rebinned, l_rebinned])
 
-    # calculate snr at 5100-5800A
-    mean_flux, noise, snr = calc_SNR(original_flux_rest, original_l_rest)
-    print(snr)
+#     # calculate snr at 5100-5800A
+#     mean_flux, noise, snr = calc_SNR(original_flux_rest, original_l_rest)
+#     print(snr)
 
-    # combine channels and plot
+#     # combine channels and plot
 
-    # *non-rebinned* spectrum and template
-    original = merge_orignal_de_z(original_de_z_flux, original_de_z_l)
-    template = merge_orignal_de_z(original_de_z_f_templ, original_de_z_l)
+#     # *non-rebinned* spectrum and template
+#     original = merge_orignal_de_z(original_de_z_flux, original_de_z_l)
+#     template = merge_orignal_de_z(original_de_z_f_templ, original_de_z_l)
 
-    # *rebinned* spectrum (including 0 to 30000)
-    spec_flux, spec_l = merge_channels(channel_pairs, grid_size = grid_size)
-    # plot_spec(spec_flux, spec_l, redshift, original, templ = template)
+#     # *rebinned* spectrum (including 0 to 30000)
+#     spec_flux, spec_l = merge_channels(channel_pairs, grid_size = grid_size)
+#     # plot_spec(spec_flux, spec_l, redshift, original, templ = template)
     
-    # crop spectrum to common wavelength range
-    final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
+#     # crop spectrum to common wavelength range
+#     final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
 
-    # plot_spec(final_spec_flux, final_spec_l, redshift, original)
+#     # plot_spec(final_spec_flux, final_spec_l, redshift, original)
 
-    # save rebinned spec
-    save_spec(final_spec_flux, final_spec_l, redshift, snr, mean_flux, base_name, output_dir)
+#     # save rebinned spec
+#     save_spec(final_spec_flux, final_spec_l, redshift, snr, mean_flux, base_name, output_dir)
 
 
 # at this point, should have a folder of all the processed spectra
