@@ -51,3 +51,4 @@ with torch.no_grad():
         x_hat, mu, logvar = self.model(x) # batch prediction
 
         reconstruction_loss, _, _ = _loss_calc_spec(x_hat, x, x_mask, )
+        reconstruction_loss.cpu().to_list()

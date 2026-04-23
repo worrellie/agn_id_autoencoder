@@ -37,8 +37,11 @@ def get_model_size_mb(model):
 
     return total_size_mb
 
-def _loss_calc_batch_superceded(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+def _loss_calc_batch(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
+    """
+    function to get average loss of batch
+    """
     batch_size = x_hat.shape[0]
     n_unmasked_pixels = x_mask.sum(dim=1)
     
@@ -63,7 +66,6 @@ def _loss_calc_batch_superceded(x_hat, x, x_mask, mu = None, logvar = None, beta
     else:
         mean_kl_div_for_batch = torch.tensor(0.0).to(x.device)
     
-
     recon_loss = mean_masked_mse_for_batch
     kl_loss = mean_kl_div_for_batch
 
@@ -71,9 +73,14 @@ def _loss_calc_batch_superceded(x_hat, x, x_mask, mu = None, logvar = None, beta
 
     return recon_loss, kl_loss, total_loss
 
-def _loss_calc_per_spec_superceded(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+def _loss_calc_per_spec(x_hat, x, x_mask, ):
+    """
+    function to get MSE of each spectrum in batch
+    return list of MSEs that is same length as number of spec n batch
+    """
 
     batch_size = x_hat.shape[0]
+
     n_unmasked_pixels = x_mask.sum(dim=1)
     
     # pixel-wise
@@ -83,75 +90,9 @@ def _loss_calc_per_spec_superceded(x_hat, x, x_mask, mu = None, logvar = None, b
     masked_sq_err = sq_err_per_element * x_mask
 
     # mse per spec
-    masked_mse_per_sample =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
-
-    # if mu is not None and logvar is not None: # (if is VAE)
-    #     # kl divs in latent space (one for each dim of latent space):
-    #     kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp())
-    # else:
-    #     mean_kl_div_for_batch = torch.tensor(0.0).to(x.device)
-    
-
-    recon_loss = masked_mse_per_sample
-    # kl_loss = mean_kl_div_for_batch
-
-    # total_loss = recon_loss + (beta * kl_loss)
+    recon_loss =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
 
     return recon_loss
-
-def _loss_calc_batch(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
-
-    batch_size = x_hat.shape[0]
-    n_unmasked_pixels = x_mask.sum(dim=1)
-    
-    # pixel-wise
-    sq_err_per_element = (x_hat - x)**2
-
-    # apply masks
-    masked_sq_err = sq_err_per_element * x_mask
-
-    # mse per spec
-    masked_mse_per_sample =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
-
-    # mean mse for batch
-    mean_masked_mse_for_batch = masked_mse_per_sample.sum() / batch_size
-    # print(f'masked recon loss (mean for batch): {mean_masked_mse_for_batch}')
-
-    if mu is not None and logvar is not None: # (if is VAE)
-        # kl divs in latent space (one for each dim of latent space):
-        kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()) 
-        mean_kl_div_for_batch = kl_divs.sum() / batch_size
-        # print(f'mean_kl_div_for_batch: {mean_kl_div_for_batch}')
-    else:
-        mean_kl_div_for_batch = torch.tensor(0.0).to(x.self.device)
-    
-    recon_loss = mean_masked_mse_for_batch
-    kl_loss = mean_kl_div_for_batch
-
-    total_loss = recon_loss + (beta * kl_loss)
-
-    return recon_loss, kl_loss, total_loss
-
-def _loss_calc_per_spec( x_hat, x, x_mask, ):
-
-    batch_size = x_hat.shape[0]
-    print(x_hat.shape)
-    if batch_size != 1:
-        warnings.warn(f"Cannot calculate loss for individual spectrum\nbatch size is {batch_size}, must be 1")
-        exit()
-    else:
-        n_unmasked_pixels = x_mask.sum(dim=1)
-        
-        # pixel-wise
-        sq_err_per_element = (x_hat - x)**2
-
-        # apply masks
-        masked_sq_err = sq_err_per_element * x_mask
-
-        # mse per spec
-        recon_loss =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
-
-        return recon_loss
 
 def plot_loss(model_losses, test_name, test= False):
 

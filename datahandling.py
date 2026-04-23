@@ -46,11 +46,12 @@ class H5SpecDataset(torch.utils.data.Dataset):
             self.hf = h5py.File(self.data_path, 'r')
 
         sample = torch.from_numpy(self.hf[self.split][self.flux_type][idx])
-        sample_mask = sample != 0
+        sample_mask = (sample != 0)
 
         # make sure sample is float32 (best for Pytorch, also I think what is in the h5)
         sample = sample.float()
         sample_mask = sample_mask.bool()
+
 
         return sample, sample_mask
 

@@ -20,6 +20,13 @@ import training
 
 import time
 
+#####################################################################################################
+# get device
+print(f"GPU available: {torch.cuda.is_available()}")
+
+device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+print(f"Device type: {device.type}")
+#####################################################################################################
 # Load data
 
 DATA = "test_all_spectra.h5"
@@ -49,8 +56,6 @@ valid_loader = torch.utils.data.DataLoader(valid, batch_size = 1, shuffle = Fals
 ###############
 TESTING = True
 verb = TESTING
-
-device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 ###############
 ###############
 
@@ -62,9 +67,9 @@ CONFIG = [
 ]
 LATENT_SIZE = 32
 ACTIVATION_FUNCTION = 'ReLU'
-EPOCHS = 50
+EPOCHS = 10
 EARLY_STOPPING = False
-BETA = 1e4 # kl weighting only used in VAE, automatically set as 0 for other models
+BETA = 1e-3 # kl weighting only used in VAE, automatically set as 0 for other models
 LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 1e-8
 
