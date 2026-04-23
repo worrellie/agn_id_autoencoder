@@ -298,6 +298,8 @@ def save_h5(files, train_files, valid_files, test_files):
         'validation': valid_files,
         'test': test_files
     }
+    
+    train_stats = {}
 
     # 4. Create the H5 File
     with h5py.File(h5_filename, 'w') as hf:
@@ -318,13 +320,19 @@ def save_h5(files, train_files, valid_files, test_files):
             #                                     dtype='f8', compression='gzip', chunks=True)
             #     d_norm_fac = group.create_dataset('norm_factor', (n_samples,), dtype='f8')
             d_flux_norm = group.create_dataset('normalized_flux', (n_samples, n_pixels), 
-                                                dtype='f8', compression='gzip', chunks=True)
+                                                dtype='f8', compression='gzip', chunks=(1, n_pixels))
 
             d_flux_raw  = group.create_dataset('raw_flux', (n_samples, n_pixels), 
-                                              dtype='f8', compression='gzip', chunks=True)
+                                              dtype='f8', compression='gzip', chunks=(1, n_pixels))
             d_z = group.create_dataset('redshift', (n_samples,), dtype='f8')
             d_snr = group.create_dataset('SNR', (n_samples,), dtype='f8')
             d_ids = group.create_dataset('obj_id', (n_samples,), dtype='S100')
+
+            # Welford's algorithm/ running sums
+            # this is important for data efficiency if have a bazillion files
+            total_pixels = 0
+            sum_raw = 0.0; sum_sq_raw = 0.0
+            sum_norm = 0.0; sum_sq_norm = 0.0
 
             # 5. Fill datasets incrementally
             for i, f in enumerate(split_list):
@@ -337,9 +345,25 @@ def save_h5(files, train_files, valid_files, test_files):
                         
                         print(hdul[1].header)
                         current_flux = hdul[1].data['flux'].astype(np.float64)
-                        redshift = hdul[1].header.get('OG_Z', 0.0)
-                        snr = hdul[1].header.get('SNR', 0.0)
-                        norm_factor = hdul[1].header.get('NORMFAC', 0.0)
+                        norm_factor = hdul[1].header.get('NORMFAC')
+                        if norm_factor is None or norm_factor == 0 or np.isnan(norm_factor):
+                            warnings.warn(f"Invalid NORMFAC ({norm_factor}) in {os.path.basename(f)}. Defaulting to 1.0.")
+                            norm_factor = 1.0                            
+                        norm_flux = current_flux/norm_factor
+                        if split_name == "train":
+                            mask = (current_flux!=0) & (~np.isnan(current_flux)) & (~np.isnan(norm_flux))
+                            valid_raw = current_flux[mask]
+                            valid_norm = norm_flux[mask]
+                            # for std/mean calcs
+                            total_pixels += valid_raw.size
+                            sum_raw += np.sum(valid_raw)
+                            sum_sq_raw += np.sum(valid_raw**2)
+                            sum_norm += np.sum(valid_norm)
+                            sum_sq_norm += np.sum(valid_norm**2)
+                        # 
+                        redshift = hdul[1].header.get('OG_Z')
+                        snr = hdul[1].header.get('SNR')
+
                         # print(norm_factor)
                         # if norm:
                         #     norm_factor = hdul[0].header.get('NORMFAC', 1.0)
@@ -349,19 +373,40 @@ def save_h5(files, train_files, valid_files, test_files):
                         d_z[i] = redshift
                         d_snr[i] = snr
                         d_ids[i] = os.path.basename(f).encode('utf-8')
-                        
-                        # If you want to store the "raw" physical flux, we multiply back
-                        # if norm:
-                        #     d_flux_raw[i] = current_flux * norm_factor
-                        # else: 
+
                         d_flux_raw[i] = current_flux 
                         d_flux_norm[i] = current_flux/norm_factor
-                
+    
                 except Exception as e:
                     print(f"Skipping {f} due to error: {e}")
                 
                 if (i + 1) % 100 == 0:
                     print(f"  {split_name} progress: {i+1}/{n_samples}")
+
+            if split_name == "train":
+                final_mean_raw = sum_raw / total_pixels
+                # Variance = (Sum_of_Squares / n) - (Mean^2)
+                final_variance_raw = (sum_sq_raw / total_pixels) - (final_mean_raw**2)
+                final_std_raw = np.sqrt(max(0, final_variance_raw)) # max(0,...) prevents tiny negative numbers due to precision
+                
+                final_mean_norm = sum_norm / total_pixels
+                # Variance = (Sum_of_Squares / n) - (Mean^2)
+                final_variance_norm = (sum_sq_norm / total_pixels) - (final_mean_norm**2)
+                final_std_norm = np.sqrt(max(0, final_variance_norm)) # max(0,...) prevents tiny negative numbers due to precision
+            
+                train_stats['raw_mean'] = final_mean_raw
+                train_stats['raw_std'] = final_std_raw
+                train_stats['norm_mean'] = final_mean_norm
+                train_stats['norm_std'] = final_std_norm
+            
+
+
+        if 'raw_mean' in train_stats:
+            hf.attrs['raw_mean'] = train_stats['raw_mean']
+            hf.attrs['raw_std'] = train_stats['raw_std']
+
+            hf.attrs['norm_mean'] = train_stats['norm_mean']
+            hf.attrs['norm_std'] = train_stats['norm_std']
 
     print(f"\n🏁 Successfully compiled {h5_filename}")
 
@@ -434,11 +479,15 @@ def check_h5_structure(name, obj):
     elif isinstance(obj, h5py.Dataset):
         print(f"{indent}📊 Dataset: {name} | Shape: {obj.shape} | Type: {obj.dtype}")
 
-def compute_and_save_stats(h5_path):
+def compute_and_save_stats(h5_path, norm):
     with h5py.File(h5_path, 'a') as hf: # 'a' for append/edit mode
         # 1. Pull the training data
         # Using a slice [:] loads it into RAM; if too big, use a loop
-        train_flux = hf['train']["raw_flux"][:]
+        if norm:
+            flux_type = 'normalized_flux'
+        else:
+            flux_type = 'raw_flux'
+        train_flux = hf['train'][flux_type][:]
         
         # 2. Create a mask to ignore gaps (0.0)
         mask = (train_flux != 0)
@@ -590,7 +639,7 @@ files, train_files, valid_files, test_files = sklearn_split_data(output_dir, h5_
 save_h5(files, train_files, valid_files, test_files)
 
 # update h5 with train set stats
-compute_and_save_stats('test_all_spectra.h5')
+# compute_and_save_stats('test_all_spectra.h5', )
 
 # check h5
 with h5py.File(h5_filename, 'r') as hf:

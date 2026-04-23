@@ -38,7 +38,7 @@ z09_and_z08/
 processed_z09_z08_noisy/
 processed_z09_z08_normalized_noisy/
 test_processed_z09_z08_normalized_noisy/
-
+to_process/
 *.h5
 
 RUN_*/

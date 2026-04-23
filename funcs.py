@@ -13,6 +13,8 @@ from torch.distributions.normal import Normal
 import math
 import pickle as pkl
 from torch.utils.data import Subset
+
+import warnings
 # from ignite.engine import Engine, Events
 # from ignite.handlers import ModelCheckpoint
 
@@ -35,7 +37,7 @@ def get_model_size_mb(model):
 
     return total_size_mb
 
-def _loss_calc_batch(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+def _loss_calc_batch_superceded(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
     batch_size = x_hat.shape[0]
     n_unmasked_pixels = x_mask.sum(dim=1)
@@ -69,7 +71,7 @@ def _loss_calc_batch(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
     return recon_loss, kl_loss, total_loss
 
-def _loss_calc_per_spec(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+def _loss_calc_per_spec_superceded(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
     batch_size = x_hat.shape[0]
     n_unmasked_pixels = x_mask.sum(dim=1)
@@ -97,172 +99,59 @@ def _loss_calc_per_spec(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
     return recon_loss
 
+def _loss_calc_batch(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
-def train_ae(epochs, train_loader, valid_loader, model, optimizer, early_stopping = None, beta = 0 , verbose = True, *args):
+    batch_size = x_hat.shape[0]
+    n_unmasked_pixels = x_mask.sum(dim=1)
+    
+    # pixel-wise
+    sq_err_per_element = (x_hat - x)**2
 
-    print('training model...')
+    # apply masks
+    masked_sq_err = sq_err_per_element * x_mask
 
-    train_mean = train_loader.dataset.mean
-    train_std = train_loader.dataset.std
-    # train_mean = None
-    # train_std = None
+    # mse per spec
+    masked_mse_per_sample =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
 
-    model.to(device)
+    # mean mse for batch
+    mean_masked_mse_for_batch = masked_mse_per_sample.sum() / batch_size
+    # print(f'masked recon loss (mean for batch): {mean_masked_mse_for_batch}')
 
-    # recon_loss = nn.MSELoss()
+    if mu is not None and logvar is not None: # (if is VAE)
+        # kl divs in latent space (one for each dim of latent space):
+        kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()) 
+        mean_kl_div_for_batch = kl_divs.sum() / batch_size
+        # print(f'mean_kl_div_for_batch: {mean_kl_div_for_batch}')
+    else:
+        mean_kl_div_for_batch = torch.tensor(0.0).to(x.self.device)
+    
+    recon_loss = mean_masked_mse_for_batch
+    kl_loss = mean_kl_div_for_batch
 
-    train_losses = []
-    train_mses = []
-    train_kls = []
-    valid_losses = []
-    valid_mses = []
-    valid_kls = []
+    total_loss = recon_loss + (beta * kl_loss)
 
-    for epoch in range(epochs):
+    return recon_loss, kl_loss, total_loss
 
-        model.train()
-        train_loss = 0
-        train_mse = 0
-        train_kl = 0
-        valid_loss = 0
-        valid_mse = 0
-        valid_kl = 0
+def _loss_calc_per_spec( x_hat, x, x_mask, ):
 
-        processed_samples = 0
-
-        for x, x_mask in train_loader:
-
-            if train_mean is not None and train_std is not None:
-                print('normalizing input data')
-                x = (x - train_mean) / train_std # normalize data
-                x = x * x_mask # to ensure instrument gap has 0 flux
-            elif train_mean is None and train_std is None:
-                print('no normalization of input data')
-            else:
-                print('something went wrong with normalisation./n you are missing mean or std')
-
-            x = x.to(device)
-            x_mask = x_mask.to(device)
-
-            x_hat, mu, logvar = model(x) # batch prediction
-
-            # stats for *batch*
-            mse, kl, loss = _loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = beta) # 'mean' gives loss per sample for batch
-
-            optimizer.zero_grad()
-
-            loss.backward()
-
-            # print(type(loss))
-            # print(loss)
-
-            train_mse += mse.item() * x.size(0) # reconstruction loss per sample 
-            # (mse.item is batch mean therefore need to multiply by number in batch
-            # and later divide by number of samples)
-            train_kl += kl.item() * x.size(0) # kl divergence
-            # train_w_kls += w_kl.item() / x.size(0) # weighted kl divergence
-
-            train_loss += loss.item() * x.size(0) # total loss
-
-            optimizer.step()
-
-        # train_samples = len(train_loader.dataset)
-
-            # in case drop_last is True, divide my number used, rather than dataset size
-            processed_samples += x.size(0)
-
-        epoch_avg_mse = train_mse / processed_samples
-        train_mses.append(epoch_avg_mse)
-        epoch_avg_kl = train_kl / processed_samples
-        train_kls.append(epoch_avg_kl)
-        # epoch_avg_w_kl = train_w_kl / train_samples
-        # train_w_kls.append(epoch_avg_w_kls)
-
-        epoch_avg_loss = train_loss / processed_samples # average loss per sample 
-        train_losses.append(epoch_avg_loss) # losses for each epoch
-
-        if verbose:
-            print('-------------------------------------------')
-            print(f'training: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_loss:.10f},\nmse: {epoch_avg_mse:.10f},\nkl: {epoch_avg_kl:e}')
-            
-
-        model.eval()
-        if valid_loader is not None:
-
-            with torch.no_grad():
-
-                processed_samples_valid = 0 
-
-                for x, x_mask in valid_loader:
-                    # print('normalizing input data')
-                    if train_mean is not None and train_std is not None:
-                        x = (x - train_mean) / train_std # normalize data
-                        x = x * x_mask # to ensure instrument gap has 0 flux
-                    elif train_mean is None and train_std is None:
-                        continue
-                        # print('no normalization of input data')
-                    else:
-                        print('something went wrong with normalisation./n you are missing mean or std')
-
-                    x = x.to(device)
-                    x_mask = x_mask.to(device)
-
-                    x_hat, mu, logvar = model(x)
-
-                    mse, kl, loss = _loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = beta) # 'mean' gives loss per sample for batch
-
-                    valid_mse += mse.item() * x.size(0) # reconstruction loss
-                    valid_kl += kl.item() * x.size(0) # kl divergence
-                    # valid_w_kls += w_kl.item() / x.size(0) # weighted kl divergence
-
-                    valid_loss += loss.item() * x.size(0)
-
-                # valid_samples = len(valid_loader.dataset)
-
-                    processed_samples_valid += x.size(0)
-
-                epoch_avg_valid_mse = valid_mse / processed_samples_valid
-                valid_mses.append(epoch_avg_valid_mse)
-                epoch_avg_valid_kl = valid_kl / processed_samples_valid
-                valid_kls.append(epoch_avg_valid_kl)
-                # epoch_avg_valid_w_kl = valid_w_kl / valid_samples
-                # valid_w_kls.append(epoch_avg_valid_w_kls)
-                
-                epoch_avg_valid_loss = valid_loss / processed_samples_valid
-                valid_losses.append(epoch_avg_valid_loss)
-
-            if verbose:
-                print(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
-
-            if early_stopping is not None:
-                early_stopping.check_early_stop(epoch_avg_valid_loss, model, epoch)
-
-                if early_stopping.stop_training:
-                    print('---------------------------------')
-                    print(f'Early Stopping: epoch {epoch}')
-                    print('---------------------------------')
-                    break
-                
-
-
+    batch_size = x_hat.shape[0]
+    print(x_hat.shape)
+    if batch_size != 1:
+        warnings.warn(f"Cannot calculate loss for individual spectrum\nbatch size is {batch_size}, must be 1")
+        exit()
+    else:
+        n_unmasked_pixels = x_mask.sum(dim=1)
         
-    print('training finished, model saved')
-    # # when at end of training, save
-    # save_path = path.Path(test_name, f"{test_name}.pt") # overwrite is default
-    # torch.save(model.state_dict(), save_path)
+        # pixel-wise
+        sq_err_per_element = (x_hat - x)**2
 
-    model_losses = {
-        'beta': beta,
-        'train_total': train_losses,
-        'train_mse': train_mses,
-        'train_kl_raw': train_kls,
-        'valid_total': valid_losses,
-        'valid_mse': valid_mses,
-        'valid_kl_raw': valid_kls,
+        # apply masks
+        masked_sq_err = sq_err_per_element * x_mask
 
-    }
+        # mse per spec
+        recon_loss =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
 
-    return model, model_losses
+        return recon_loss
 
 def plot_loss(model_losses, test_name, test= False):
 
@@ -310,8 +199,8 @@ def plot_loss(model_losses, test_name, test= False):
     if not test:
         pth = path.Path(test_name, f"{test_name}_loss.png")
         plt.savefig(pth)
-    
-    plt.show()
+    else:
+        plt.show()
 
 def _get_example_specs(loader, model):
 
@@ -328,32 +217,28 @@ def _get_example_specs(loader, model):
     train_std = temp_loader.dataset.std
     # train_mean = None
     # train_std = None
+    normalize = False
+    if train_mean is not None and train_std is not None:
+        normalize = True
+    else:
+        print('not normalizing input data')
 
-
-    print('predicting...')
+    # print('predicting...')
     losses = []
     model.eval()
     with torch.no_grad():
         for x, x_mask in temp_loader:
 
-            if train_mean is not None and train_std is not None:
-                # print('normalizing input data')
+            if normalize:
                 x = (x - train_mean) / train_std # normalize data
                 x = x * x_mask # to ensure instrument gap has 0 flux
-            elif train_mean is None and train_std is None:
-                # print('no normalization of input data')
-                continue
-            else:
-                print('something went wrong with normalisation./n you are missing mean or std')
-
-    
 
             x = x.to(device)
             x_mask = x_mask.to(device)
 
             x_hat, mu, logvar = model(x)
 
-            mses = _loss_calc_per_spec(x_hat, x, x_mask, mu, logvar, )
+            mses = _loss_calc_per_spec(x_hat, x, x_mask,)
             mses = mses.cpu().tolist()
 
             losses.extend(mses)
@@ -391,6 +276,12 @@ def _predict_examples(subset_loader, model,):
     # train_mean = None
     # train_std = None
 
+    normalize = False
+    if train_mean is not None and train_std is not None:
+        normalize = True
+    else:
+        print('not normalizing input data')
+
     output = {'recon' : [],
               'original' : [], 
               'mask' : [],
@@ -405,23 +296,15 @@ def _predict_examples(subset_loader, model,):
     with torch.no_grad():
         for x, x_mask in subset_loader:
 
-            if train_mean is not None and train_std is not None:
-                # print('normalizing input data')
+            if normalize:
                 x = (x - train_mean) / train_std # normalize data
                 x = x * x_mask # to ensure instrument gap has 0 flux
-            elif train_mean is None and train_std is None:
-                # print('no normalization of input data')
-                continue
-            else:
-                print('something went wrong with normalisation./n you are missing mean or std')
-
-
             x = x.to(device)
             x_mask = x_mask.to(device)
 
             x_hat, mu, logvar = model(x)
 
-            mses = _loss_calc_per_spec(x_hat, x, x_mask, mu, logvar, )
+            mses = _loss_calc_per_spec(x_hat, x, x_mask, )
 
             output['recon'].extend(x_hat.cpu().tolist())
             output['original'].extend(x.cpu().tolist())
@@ -499,11 +382,12 @@ def plot_examples(loader, model, test_params, test=False):
 
     fig.suptitle(f"latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['max_epochs']}")
 
+    plt.tight_layout()
     if not test:
         pth = path.Path(test_params['test_name'], f"{test_params['test_name']}.png")
         plt.savefig(pth)
-    
-    plt.show()
+    else:
+        plt.show()
 
 def save_test_params(test_dict, test_name, test=False):
 

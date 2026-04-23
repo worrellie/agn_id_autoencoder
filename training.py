@@ -1,0 +1,271 @@
+
+import torch
+from torch import nn, optim
+from torchvision import datasets, transforms
+import matplotlib.pyplot as plt
+import os
+from astropy.io import fits
+from astropy.wcs import WCS
+import numpy as np
+from sklearn.model_selection import train_test_split
+import torch.nn.functional as F
+from torch.distributions.normal import Normal
+import math
+import pathlib as path
+import h5py
+import warnings
+import funcs
+
+class Trainer:
+
+    def __init__(self, device, test_name, model, optimizer, early_stopping, beta, test = False):
+
+        self.device = device
+
+        self.test_name = test_name
+        self.model = model
+        self.optimizer = optimizer
+        self.early_stopping = early_stopping
+        self.beta = beta
+        if self.beta == 0 and self.model.type == 'vae':
+            warnings.warn("Your beta value for a VAE is 0")
+
+        self.test = test
+        
+    def train_ae(self, epochs, train_loader, valid_loader = None, verbose = False):
+
+        train_mean = train_loader.dataset.mean
+        train_std = train_loader.dataset.std
+        normalize = False
+        if train_mean is not None and train_std is not None:
+            normalize = True
+        else:
+            print('not normalizing input data')
+
+        self.model.to(self.device)
+
+        train_losses = []
+        train_mses = []
+        train_kls = []
+        valid_losses = []
+        valid_mses = []
+        valid_kls = []
+
+        print('training model...')
+    
+        for epoch in range(epochs):
+
+            self.model.train()
+            train_loss = 0
+            train_mse = 0
+            train_kl = 0
+            valid_loss = 0
+            valid_mse = 0
+            valid_kl = 0
+
+            processed_samples = 0
+
+            for x, x_mask in train_loader:
+
+                if normalize:
+                    x = (x - train_mean) / train_std # normalize data
+                    x = x * x_mask # re-set 'gaps'/masked regions as zero
+
+                x = x.to(self.device)
+                x_mask = x_mask.to(self.device)
+
+                x_hat, mu, logvar = self.model(x) # batch prediction
+
+                # stats for *batch*
+                mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = self.beta) # 'mean' gives loss per sample for batch
+
+                self.optimizer.zero_grad()
+
+                loss.backward()
+
+                train_mse += mse.item() * x.size(0) # reconstruction loss per sample 
+                # (mse.item is batch mean therefore need to multiply by number in batch
+                # and later divide by number of samples)
+                train_kl += kl.item() * x.size(0) # kl divergence
+                # train_w_kls += w_kl.item() / x.size(0) # weighted kl divergence
+
+                train_loss += loss.item() * x.size(0) # total loss
+
+                self.optimizer.step()
+
+                # in case drop_last is True, divide my number used, rather than dataset size
+                processed_samples += x.size(0)
+
+            epoch_avg_mse = train_mse / processed_samples
+            train_mses.append(epoch_avg_mse)
+            epoch_avg_kl = train_kl / processed_samples
+            train_kls.append(epoch_avg_kl)
+
+            epoch_avg_loss = train_loss / processed_samples # average loss per sample 
+            train_losses.append(epoch_avg_loss) # losses for each epoch
+
+            if verbose:
+                print('-------------------------------------------')
+                print(f'training: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_loss:.10f},\nmse: {epoch_avg_mse:.10f},\nkl: {epoch_avg_kl:e}')
+            
+            if valid_loader is not None:
+                # dont update weights/ train
+                self.model.eval() 
+                with torch.no_grad(): 
+
+                    processed_samples_valid = 0 
+
+                    for x, x_mask in valid_loader:
+                        if normalize:
+                            x = (x - train_mean) / train_std # normalize data
+                            x = x * x_mask # re-set 'gaps'/masked regions as zer
+
+                        x = x.to(self.device)
+                        x_mask = x_mask.to(self.device)
+
+                        x_hat, mu, logvar = self.model(x)
+
+                        mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = self.beta) # 'mean' gives loss per sample for batch
+
+                        valid_mse += mse.item() * x.size(0) # reconstruction loss
+                        valid_kl += kl.item() * x.size(0) # kl divergence
+                        # valid_w_kls += w_kl.item() / x.size(0) # weighted kl divergence
+
+                        valid_loss += loss.item() * x.size(0)
+
+                    # valid_samples = len(valid_loader.dataset)
+
+                        processed_samples_valid += x.size(0)
+
+                    epoch_avg_valid_mse = valid_mse / processed_samples_valid
+                    valid_mses.append(epoch_avg_valid_mse)
+                    epoch_avg_valid_kl = valid_kl / processed_samples_valid
+                    valid_kls.append(epoch_avg_valid_kl)
+                    
+                    epoch_avg_valid_loss = valid_loss / processed_samples_valid
+                    valid_losses.append(epoch_avg_valid_loss)
+
+                if verbose:
+                    print(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
+
+
+                if self.early_stopping is not None:
+                    self.early_stopping.check_early_stop(epoch_avg_valid_loss, self.model, epoch)
+
+                    if self.early_stopping.stop_training:
+                        print('---------------------------------')
+                        print(f'Early Stopping: epoch {epoch}')
+                        print('---------------------------------')
+                        break
+            
+        print('training finished')
+        # when at end of training, save (if not a test)
+        if not self.test:
+            save_path = path.Path(self.test_name, f"{self.test_name}.pt") # overwrite is default
+            torch.save(self.model.state_dict(), save_path)
+
+        model_losses = {
+            'beta': self.beta,
+            'train_total': train_losses,
+            'train_mse': train_mses,
+            'train_kl_raw': train_kls,
+            'valid_total': valid_losses,
+            'valid_mse': valid_mses,
+            'valid_kl_raw': valid_kls,
+
+        }
+
+        return self.model, model_losses
+        
+    # SOMETHING MIGHT BE WRONG IN FUCNTION BELOW.
+    # BETA IS NOT USED... WHERE IS SUPPOSED TO BE?
+    # def _loss_calc_batch(self, x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
+
+    #     batch_size = x_hat.shape[0]
+    #     n_unmasked_pixels = x_mask.sum(dim=1)
+        
+    #     # pixel-wise
+    #     sq_err_per_element = (x_hat - x)**2
+
+    #     # apply masks
+    #     masked_sq_err = sq_err_per_element * x_mask
+
+    #     # mse per spec
+    #     masked_mse_per_sample =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
+
+    #     # mean mse for batch
+    #     mean_masked_mse_for_batch = masked_mse_per_sample.sum() / batch_size
+    #     # print(f'masked recon loss (mean for batch): {mean_masked_mse_for_batch}')
+
+    #     if mu is not None and logvar is not None: # (if is VAE)
+    #         # kl divs in latent space (one for each dim of latent space):
+    #         kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()) 
+    #         mean_kl_div_for_batch = kl_divs.sum() / batch_size
+    #         # print(f'mean_kl_div_for_batch: {mean_kl_div_for_batch}')
+    #     else:
+    #         mean_kl_div_for_batch = torch.tensor(0.0).to(x.self.device)
+        
+    #     recon_loss = mean_masked_mse_for_batch
+    #     kl_loss = mean_kl_div_for_batch
+
+    #     total_loss = recon_loss + (beta * kl_loss)
+
+    #     return recon_loss, kl_loss, total_loss
+
+    # def _loss_calc_per_spec(self, x_hat, x, x_mask):
+
+    #     batch_size = x_hat.shape[0]
+    #     if batch_size != 1:
+    #         warnings.warn(f"Cannot calculate loss for individual spectrum\nbatch size is {}, must be 1")
+    #         return
+    #     else:
+    #         n_unmasked_pixels = x_mask.sum(dim=1)
+            
+    #         # pixel-wise
+    #         sq_err_per_element = (x_hat - x)**2
+
+    #         # apply masks
+    #         masked_sq_err = sq_err_per_element * x_mask
+
+    #         # mse per spec
+    #         recon_loss =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
+
+    #         return recon_loss
+
+class CustomEarlyStopping:
+
+    def __init__(self, test_name, patience = 5, delta = 0, test = False, verbose = False):
+
+        self.patience = patience
+        self.delta = delta
+        self.verbose = verbose
+        self.best_loss = None
+        self.no_improve_count = 0
+        self.stop_training = False
+        self.test = test
+        self.test_name = test_name
+
+    def save_model(self, model, test_name, epoch):
+        
+        save_path = path.Path(test_name, f"{test_name}_{self.patience}_{self.delta}.pt") # overwrite is default
+
+        torch.save(model.state_dict(), save_path)
+    
+    def check_early_stop(self, validation_loss, model, epoch):
+
+        if self.best_loss is None or validation_loss < self.best_loss - self.delta:
+            # if starting or if new validation loss is better than current best loss
+            # set best loss as new validaton loss and reset count of no improvement
+            # and save best model
+            self.best_loss = validation_loss
+            if not self.test:
+                self.save_model(model, self.test_name, epoch)
+            self.no_improve_count = 0
+        else:
+            # if new validation loss is not better, increase count of no improvement
+            self.no_improve_count += 1
+            if self.no_improve_count >= self.patience:
+                # no improve count reaches patience, stop
+                self.stop_training = True
+                if self.verbose:
+                    print('Stopping Early')

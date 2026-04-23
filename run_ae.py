@@ -14,19 +14,21 @@ import pathlib as path
 import h5py
 
 import funcs
-import mods
+from datahandling import H5SpecDataset
+import autoencoder as ae
+import training
+
+import time
 
 # Load data
 
 DATA = "test_all_spectra.h5"
 
-train = mods.H5SpecDataset(DATA, split = "train")
-valid = mods.H5SpecDataset(DATA, split = "validation")
-test = mods.H5SpecDataset(DATA, split = "test")
+# default is normalised data
+train = H5SpecDataset(DATA, split = "train")
+valid = H5SpecDataset(DATA, split = "validation")
 
 # # 
-# import time
-
 # for nw in [0, 2, 4, 8, 12]:
 #     train_loader = torch.utils.data.DataLoader(train, batch_size=64, num_workers=nw)
 #     start = time.time()
@@ -40,13 +42,13 @@ test = mods.H5SpecDataset(DATA, split = "test")
 
 train_loader = torch.utils.data.DataLoader(train, batch_size = 2, shuffle = True, num_workers = 0)
 valid_loader = torch.utils.data.DataLoader(valid, batch_size = 1, shuffle = False,)
-test_loader = torch.utils.data.DataLoader(test, batch_size = 1, shuffle = False,)
 
 #################################################################################################
 
 ###############
 ###############
-TESTING = False
+TESTING = True
+verb = TESTING
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 ###############
@@ -62,17 +64,17 @@ LATENT_SIZE = 32
 ACTIVATION_FUNCTION = 'ReLU'
 EPOCHS = 50
 EARLY_STOPPING = False
-BETA = 0 # kl weighting only used in VAE, automatically set as 0 for other models
+BETA = 1e4 # kl weighting only used in VAE, automatically set as 0 for other models
 LEARNING_RATE = 1e-4
 WEIGHT_DECAY = 1e-8
 
 #####################################
 ############# make model ############
 #####################################
-model = mods.VAEAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
+model = ae.VAEAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
 #####################################
 
-TEST_NAME = f'RUN_{model.type}_nl{len(CONFIG)}_ls{LATENT_SIZE}_e{EPOCHS}_{ACTIVATION_FUNCTION}_B{BETA}_lr{LEARNING_RATE:.0e}_wd{WEIGHT_DECAY}_es{EARLY_STOPPING}'
+TEST_NAME = f'RUN_{model.type}_nl{len(CONFIG)}_ls{LATENT_SIZE}_e{EPOCHS}_{ACTIVATION_FUNCTION}_B{BETA:.0e}_lr{LEARNING_RATE:.0e}_wd{WEIGHT_DECAY}_es{EARLY_STOPPING}'
 
 test_params = {
     'test_name': TEST_NAME,
@@ -94,7 +96,7 @@ funcs.save_test_params(test_params, TEST_NAME, test=TESTING)
 print(model)
 
 if EARLY_STOPPING:
-    early_stopping = mods.CustomEarlyStopping(TEST_NAME, patience = 10, delta = 0.0, test = TESTING, verbose = True)
+    early_stopping = training.CustomEarlyStopping(TEST_NAME, patience = 10, delta = 0.0, test = TESTING, verbose = verb)
 else:
     early_stopping = None
 
@@ -102,16 +104,14 @@ optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT
 
 # train
 torch.cuda.empty_cache()
-# model, model_losses = funcs.train_ae(EPOCHS, train_loader, valid_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = True, )
+# model, model_losses = funcs.train_ae(EPOCHS, train_loader, valid_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = verb, )
+start = time.time()
+trainer = training.Trainer(device, TEST_NAME, model, optimizer, early_stopping, BETA, test = TESTING)
+model, model_losses = trainer.train_ae(EPOCHS, train_loader, valid_loader = valid_loader, verbose = verb)
+stop = time.time()
 
-
-trainer = mods.Trainer(device, TEST_NAME, model, optimizer, early_stopping, BETA)
-model, model_losses = trainer.train_ae(EPOCHS, train_loader, valid_loader = valid_loader, verbose = True)
+print(f"{stop-start} seconds to train")
 
 funcs.plot_loss(model_losses, test_params['test_name'], test=TESTING)
 
 funcs.plot_examples(train_loader, model, test_params, test = TESTING)
-
-# then get TEST DATA results for analysis
-# reconstruction loss, min, max, mean, median
-# reconstruction loss histogram
