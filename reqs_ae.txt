@@ -1,0 +1,12 @@
+--find-links https://download.pytorch.org/whl/cu126
+
+numpy
+scipy
+astropy
+matplotlib
+specutils
+torch
+torchvision
+torchaudio
+scikit-learn
+h5py
