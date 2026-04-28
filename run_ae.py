@@ -48,6 +48,18 @@ def main():
             torch.set_num_threads(num_threads)
             print(f"num threads set to: {torch.get_num_threads()}")
 
+    ###############
+    ###############
+    TESTING = False
+    verb = TESTING
+
+    if TESTING:
+        batch_size_train = 2
+        batch_size_valid = 1
+    else:
+        batch_size_train = batch_size_valid = 64
+    ###############
+    ###############
 
     #####################################################################################################
     # Load data
@@ -78,17 +90,11 @@ def main():
         num_workers = 0
         
 
-    train_loader = torch.utils.data.DataLoader(train, batch_size = 2, shuffle = True, num_workers = num_workers)
-    valid_loader = torch.utils.data.DataLoader(valid, batch_size = 1, shuffle = False,)
+    train_loader = torch.utils.data.DataLoader(train, batch_size = batch_size_train, shuffle = True, num_workers = num_workers)
+    valid_loader = torch.utils.data.DataLoader(valid, batch_size = batch_size_valid, shuffle = False,)
 
     #################################################################################################
 
-    ###############
-    ###############
-    TESTING = False
-    verb = TESTING
-    ###############
-    ###############
 
     # intiate test paramters and stuff
 
