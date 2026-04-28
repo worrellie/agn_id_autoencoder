@@ -17,10 +17,20 @@ import funcs
 from datahandling import H5SpecDataset
 import autoencoder as ae
 import training
-
+import argparse
 import time
 
 def main():
+
+    parser = argparse.ArgumentParser()
+
+    parser.add_argument('-e', '--epochs', default=10, type = int)
+    parser.add_argument('-s', '--early_stop', action='store_false') # type=bool not recommended
+    parser.add_argument('-b', '--beta', default=0.0, type=float)
+    parser.add_argument('-l', '--learn_rate', default=1e-4, type=float)
+    parser.add_argument('-d', '--weight_decay', default=1e-8, type=float)
+
+    args = parser.parse_args()
 
     #####################################################################################################
     # get device
@@ -88,11 +98,12 @@ def main():
     ]
     LATENT_SIZE = 32
     ACTIVATION_FUNCTION = 'ReLU'
-    EPOCHS = 10
-    EARLY_STOPPING = False
-    BETA = 0 # kl weighting only used in VAE, automatically set as 0 for other models
-    LEARNING_RATE = 1e-4
-    WEIGHT_DECAY = 1e-8
+
+    EPOCHS = args.epochs
+    EARLY_STOPPING = args.early_stop
+    BETA = args.beta # kl weighting only used in VAE, automatically set as 0 for other models
+    LEARNING_RATE = args.learn_rate
+    WEIGHT_DECAY = args.weight_decay
 
     #####################################
     ############# make model ############
