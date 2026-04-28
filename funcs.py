@@ -139,8 +139,11 @@ def plot_loss(model_losses, test_name, test= False):
 
     plt.tight_layout()
     if not test:
-        pth = path.Path(test_name, f"{test_name}_loss.png")
-        plt.savefig(pth)
+        pth_fig = path.Path(test_name, f"{test_name}_loss.png")
+        pth_obj = path.Path(test_name, f"{test_name}_loss.pkl")
+        plt.savefig(pth_fig)
+        with open(pth_obj, 'wb') as o:
+            pkl.dump(fig, o)
     else:
         plt.show()
 
@@ -180,7 +183,7 @@ def _get_example_specs(loader, model):
 
             x_hat, mu, logvar = model(x)
 
-            mses = _loss_calc_per_spec(x_hat, x, x_mask,)
+            mses = loss_calc_per_spec(x_hat, x, x_mask,)
             mses = mses.cpu().tolist()
 
             losses.extend(mses)
@@ -246,7 +249,7 @@ def _predict_examples(subset_loader, model,):
 
             x_hat, mu, logvar = model(x)
 
-            mses = _loss_calc_per_spec(x_hat, x, x_mask, )
+            mses = loss_calc_per_spec(x_hat, x, x_mask, )
 
             output['recon'].extend(x_hat.cpu().tolist())
             output['original'].extend(x.cpu().tolist())
@@ -326,10 +329,14 @@ def plot_examples(loader, model, test_params, test=False):
 
     plt.tight_layout()
     if not test:
-        pth = path.Path(test_params['test_name'], f"{test_params['test_name']}.png")
-        plt.savefig(pth)
+        pth_fig = path.Path(test_params['test_name'], f"{test_params['test_name']}.png")
+        pth_obj = path.Path(test_params['test_name'], f"{test_params['test_name']}.pkl")
+        plt.savefig(pth_fig)
+        with open(pth_obj, 'wb') as o:
+            pkl.dump(fig, o)
     else:
         plt.show()
+
 
 def save_test_params(test_dict, test_name, test=False):
 

@@ -44,8 +44,9 @@ else:
 
 # load test set
 DATA = "all_spectra_to_process_sf.h5"
-TEST_DIR = "tests_270426\RUN_sae_nl4_ls32_e1000_ReLU_B0e+00_lr1e-04_wd1e-08_esFalse_1"
-MODEL_PATH = os.path.join(TEST_DIR, "RUN_sae_nl4_ls32_e1000_ReLU_B0e+00_lr1e-04_wd1e-08_esFalse_1_model.pt")
+TEST_DIR = "RUN_sae_nl4_ls32_e1000_ReLU_B0e+00_lr1e-04_wd1e-08_esFalse"
+MODEL_PATH = TEST_DIR + "_model.pt"
+MODEL_PATH = os.path.join(TEST_DIR, MODEL_PATH)
 
 test_res_path = path.Path(TEST_DIR, f"test_results.json")
 if os.path.exists(test_res_path):
@@ -76,6 +77,8 @@ else:
     else:
         print('something is wrong wtih the training mean and std..')
         normalize = False
+
+    print(normalize)
 
     test = H5SpecDataset(DATA, split = "test")
     test_loader = torch.utils.data.DataLoader(test, batch_size = 1, shuffle = True, num_workers = num_workers)
@@ -135,4 +138,5 @@ rand_idx = randrange(len(test_results['xs']))
 # plot hist
 plt.hist(test_results['recon_losses'], bins = 100)
 plt.title(f"{TEST_DIR}\nTest Set Reconstruction Losses\nMean: {test_results['recon_mean']}, Median: {test_results['recon_median']}")
+plt.xlabel("Reconstruction Loss (MSE)")
 plt.show()
