@@ -13,6 +13,7 @@ from torch.distributions.normal import Normal
 import math
 import pickle as pkl
 from torch.utils.data import Subset
+import json
 
 import warnings
 # from ignite.engine import Engine, Events
@@ -73,7 +74,7 @@ def _loss_calc_batch(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
     return recon_loss, kl_loss, total_loss
 
-def _loss_calc_per_spec(x_hat, x, x_mask, ):
+def loss_calc_per_spec(x_hat, x, x_mask, ):
     """
     function to get MSE of each spectrum in batch
     return list of MSEs that is same length as number of spec n batch
@@ -336,10 +337,10 @@ def save_test_params(test_dict, test_name, test=False):
         return
 
     path.Path(test_name).mkdir(parents=False, exist_ok = False)
-    path_name = path.Path(test_name, f"{test_name}_params.pkl")
+    path_name = path.Path(test_name, f"{test_name}_params.json")
 
-    with open(path_name, 'wb') as p:
-        pkl.dump(test_dict, p)
+    with open(path_name, 'w') as p:
+        json.dump(test_dict, p, indent = 4)
 
 def global_stats(loader):
 

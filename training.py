@@ -15,6 +15,7 @@ import pathlib as path
 import h5py
 import warnings
 import funcs
+import json
 
 class Trainer:
 
@@ -32,17 +33,34 @@ class Trainer:
 
         self.test = test
 
+        try:
+            import intel_extension_for_pytorch as ipex
+            self.use_ipex = True
+        except ImportError:
+            self.use_ipex = False
+
         """
         dtype float16 is only for GPU. CPU requires bfloat16
         """
         if self.device.type == "cpu":
             self.autocast_type = torch.bfloat16
+            self.grad_scaler = None
         else:
             self.autocast_type = torch.float16
             # note: GradScaler is only for GPU!
-            self.grad_scaler = torch.GradScaler() # to scale gradients so if they are small in float16
+            # self.grad_scaler = torch.GradScaler() # to scale gradients so if they are small in float16
                                                   # they dont become zero
+            self.grad_scaler = torch.amp.GradScaler('cuda')
         
+    def get_autocast_context(self):
+        """Helper to return the correct autocast context manager"""
+        if self.use_ipex and self.device.type == "cpu":
+            import intel_extension_for_pytorch as ipex
+            return ipex.autocast(device_type="cpu", dtype=torch.bfloat16)
+        else:
+            # Fallback to standard torch autocast (handles CUDA or standard CPU)
+            return torch.amp.autocast(device_type=self.device.type, dtype=self.autocast_type)
+
     def train_ae(self, epochs, train_loader, valid_loader = None, verbose = False):
 
         train_mean = train_loader.dataset.mean
@@ -96,22 +114,33 @@ class Trainer:
 
                 self.optimizer.zero_grad()
 
-                with torch.autocast(device_type = self.device.type, dtype=self.autocast_type):
+                with self.get_autocast_context():
+                # with torch.autocast(device_type = self.device.type, dtype=self.autocast_type):
 
                     x_hat, mu, logvar = self.model(x) # batch prediction. note: only VAE will output non-None mu/var
                     
                     # stats for *batch*
                     mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = self.beta) # 'mean' gives loss per sample for batch
 
-                if self.device.type == "cpu":
-                    loss.backward()
-                    self.optimizer.step()
-                else:
+                if self.grad_scaler is not None:
                     self.grad_scaler.scale(loss).backward() # call backward on scaled loss to create scaled
                                                             # scaled gradients
                     self.grad_scaler.step(self.optimizer) # scaler.step unscales gradients. then if theyre not
                                                           # inf or nan, step is called. otherwise step is skipped
                     self.grad_scaler.update() # update scales for next iteration
+                else:
+                    loss.backward()
+                    self.optimizer.step()                    
+
+                # if self.device.type == "cpu":
+                #     loss.backward()
+                #     self.optimizer.step()
+                # else:
+                #     self.grad_scaler.scale(loss).backward() # call backward on scaled loss to create scaled
+                #                                             # scaled gradients
+                #     self.grad_scaler.step(self.optimizer) # scaler.step unscales gradients. then if theyre not
+                #                                           # inf or nan, step is called. otherwise step is skipped
+                #     self.grad_scaler.update() # update scales for next iteration
 
 
                 # note: .item() in pytorch gives UNSCALED loss
@@ -191,8 +220,10 @@ class Trainer:
         print('training finished')
         # when at end of training, save (if not a test)
         if not self.test:
-            save_path = path.Path(self.test_name, f"{self.test_name}.pt") # overwrite is default
-            torch.save(self.model.state_dict(), save_path)
+            save_path_dict = path.Path(self.test_name, f"{self.test_name}_state_dict.pt") # overwrite is default
+            torch.save(self.model.state_dict(), save_path_dict)
+            save_path_model = path.Path(self.test_name, f"{self.test_name}_model.pt")
+            torch.save(self.model, save_path_model)
 
         model_losses = {
             'beta': self.beta,
@@ -205,62 +236,15 @@ class Trainer:
 
         }
 
+        # save model losses: (if not testing)
+        if not self.test:
+            loss_pth = path.Path(self.test_name, f"{self.test_name}_losses.json")
+            with open(loss_pth, 'w') as p:
+                json.dump(model_losses, p)
+
+
         return self.model, model_losses
-        
-    # SOMETHING MIGHT BE WRONG IN FUCNTION BELOW.
-    # BETA IS NOT USED... WHERE IS SUPPOSED TO BE?
-    # def _loss_calc_batch(self, x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
-
-    #     batch_size = x_hat.shape[0]
-    #     n_unmasked_pixels = x_mask.sum(dim=1)
-        
-    #     # pixel-wise
-    #     sq_err_per_element = (x_hat - x)**2
-
-    #     # apply masks
-    #     masked_sq_err = sq_err_per_element * x_mask
-
-    #     # mse per spec
-    #     masked_mse_per_sample =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
-
-    #     # mean mse for batch
-    #     mean_masked_mse_for_batch = masked_mse_per_sample.sum() / batch_size
-    #     # print(f'masked recon loss (mean for batch): {mean_masked_mse_for_batch}')
-
-    #     if mu is not None and logvar is not None: # (if is VAE)
-    #         # kl divs in latent space (one for each dim of latent space):
-    #         kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()) 
-    #         mean_kl_div_for_batch = kl_divs.sum() / batch_size
-    #         # print(f'mean_kl_div_for_batch: {mean_kl_div_for_batch}')
-    #     else:
-    #         mean_kl_div_for_batch = torch.tensor(0.0).to(x.self.device)
-        
-    #     recon_loss = mean_masked_mse_for_batch
-    #     kl_loss = mean_kl_div_for_batch
-
-    #     total_loss = recon_loss + (beta * kl_loss)
-
-    #     return recon_loss, kl_loss, total_loss
-
-    # def _loss_calc_per_spec(self, x_hat, x, x_mask):
-
-    #     batch_size = x_hat.shape[0]
-    #     if batch_size != 1:
-    #         warnings.warn(f"Cannot calculate loss for individual spectrum\nbatch size is {}, must be 1")
-    #         return
-    #     else:
-    #         n_unmasked_pixels = x_mask.sum(dim=1)
-            
-    #         # pixel-wise
-    #         sq_err_per_element = (x_hat - x)**2
-
-    #         # apply masks
-    #         masked_sq_err = sq_err_per_element * x_mask
-
-    #         # mse per spec
-    #         recon_loss =  masked_sq_err.sum(dim=1) / n_unmasked_pixels
-
-    #         return recon_loss
+ 
 
 class CustomEarlyStopping:
 
@@ -277,9 +261,10 @@ class CustomEarlyStopping:
 
     def save_model(self, model, test_name, epoch):
         
-        save_path = path.Path(test_name, f"{test_name}_{self.patience}_{self.delta}.pt") # overwrite is default
-
-        torch.save(model.state_dict(), save_path)
+        save_path_dict = path.Path(test_name, f"{test_name}_{self.patience}_{self.delta}_state_dict.pt") # overwrite is default
+        torch.save(model.state_dict(), save_path_dict)
+        save_path_model = path.Path(test_name, f"{test_name}_{self.patience}_{self.delta}_model.pt") # overwrite is default
+        torch.save(model, save_path_model)
     
     def check_early_stop(self, validation_loss, model, epoch):
 

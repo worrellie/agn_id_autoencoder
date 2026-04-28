@@ -250,7 +250,7 @@ def calc_SNR(flux, l):
     mean_flux = np.mean(target_flux)
 
     snr = mean_flux/noise
-    print('snr', snr)
+    # print('snr', snr)
 
     return mean_flux, noise, snr
 
@@ -273,7 +273,7 @@ def save_spec(flux, l, original_z, snr, norm_factor, infile_base, outdir, noise_
     
     hdu.writeto(os.path.join(outdir, out_name), overwrite=True)
     
-    print(f"saved {out_name}")
+    # print(f"saved {out_name}")
 
     return
 
@@ -347,7 +347,7 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
                         # or just store the normalized one if that's all that's in the FITS.
                         # I'll assume you saved the normalized version to the FITS.
                         
-                        print(hdul[1].header)
+                        # print(hdul[1].header)
                         current_flux = hdul[1].data['flux'].astype(np.float64)
                         norm_factor = hdul[1].header.get('NORMFAC')
                         if norm_factor is None or norm_factor == 0 or np.isnan(norm_factor):
@@ -384,8 +384,8 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
                 except Exception as e:
                     print(f"Skipping {f} due to error: {e}")
                 
-                if (i + 1) % 100 == 0:
-                    print(f"  {split_name} progress: {i+1}/{n_samples}")
+                # if (i + 1) % 100 == 0:
+                    # print(f"  {split_name} progress: {i+1}/{n_samples}")
 
             if split_name == "train":
                 final_mean_raw = sum_raw / total_pixels
@@ -517,7 +517,7 @@ def save_zarr():
     # consider this for speeding up ml 
     # cannot do parallel stuff with hdf5
 
-    retun None
+    return None
 
 def process_single_spec(triplet, common_vals, grid_size, output_dir, resampler):
 

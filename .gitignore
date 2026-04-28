@@ -12,9 +12,11 @@ wheels/
 # Other
 other_code/
 processed_*/
-to_process/
+to_process*/
 private_key.ppk
 test_all_spectra.h5
+
+tests*/
 
 RUN_*/
 

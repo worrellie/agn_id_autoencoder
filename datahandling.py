@@ -41,6 +41,8 @@ class H5SpecDataset(torch.utils.data.Dataset):
         return self.len
     
     def __getitem__(self, idx):
+
+        # lazy loading. only open h5 file when start accessing it
         
         if self.hf is None:
             self.hf = h5py.File(self.data_path, 'r')
