@@ -29,13 +29,18 @@ def main():
     parser.add_argument('-b', '--beta', default=0.0, type=float)
     parser.add_argument('-l', '--learn_rate', default=1e-4, type=float)
     parser.add_argument('-d', '--weight_decay', default=1e-8, type=float)
-    parser.add_argument('-a', '--architecture', default=1, type=int)
 
-    parser.set_defaults(mode='ReLU')
+    parser.set_defaults(activation='ReLU', layers=[{'in': 256,   'out': 64, },], latent=32)
+
     activation_funcs = parser.add_mutually_exclusive_group()
     activation_funcs.add_argument('-r', '--relu', dest='activation', action='store_const', const='ReLU')
     activation_funcs.add_argument('-t', '--tanh', dest='activation', action='store_const', const='Tanh')
     activation_funcs.add_argument('--leaky', dest='activation', action='store_const', const='LeakyReLU')
+
+    architectures = parser.add_mutually_exclusive_group()
+    architectures.add_argument('--layers-1', dest="architectures")
+
+
 
     args = parser.parse_args()
 
