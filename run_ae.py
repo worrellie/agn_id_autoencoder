@@ -44,9 +44,6 @@ def main():
     activation_funcs.add_argument('-t', '--tanh', dest='activation', action='store_const', const='Tanh')
     activation_funcs.add_argument('--leaky', dest='activation', action='store_const', const='LeakyReLU')
 
-    architectures = parser.add_mutually_exclusive_group()
-    architectures.add_argument('--layers-1', dest="architectures")
-
     args = parser.parse_args()
 
     #####################################################################################################
