@@ -13,6 +13,9 @@ import math
 import pathlib as path
 import h5py
 
+import logging
+logger = logging.getLogger(__name__)
+
 ####### autoencoders ########
 
 class StandardAutoencoder(nn.Module):

@@ -17,6 +17,9 @@ import warnings
 import funcs
 import json
 
+import logging
+logger = logging.getLogger(__name__)
+
 class Trainer:
 
     def __init__(self, device, test_name, model, optimizer, early_stopping, beta, test = False):
@@ -69,7 +72,7 @@ class Trainer:
         if train_mean is not None and train_std is not None:
             normalize = True
         else:
-            print('not normalizing input data')
+            logger.info('not normalizing input data')
 
         self.model.to(self.device)
 
@@ -80,7 +83,7 @@ class Trainer:
         valid_mses = []
         valid_kls = []
 
-        print('training model...')
+        logger.info('training model...')
     
         for epoch in range(epochs):
 
@@ -164,8 +167,8 @@ class Trainer:
             train_losses.append(epoch_avg_loss) # losses for each epoch
 
             if verbose:
-                print('-------------------------------------------')
-                print(f'training: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_loss:.10f},\nmse: {epoch_avg_mse:.10f},\nkl: {epoch_avg_kl:e}')
+                logger.info('-------------------------------------------')
+                logger.info(f'training: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_loss:.10f},\nmse: {epoch_avg_mse:.10f},\nkl: {epoch_avg_kl:e}')
             
             if valid_loader is not None:
                 # dont update weights/ train
@@ -205,19 +208,19 @@ class Trainer:
                     valid_losses.append(epoch_avg_valid_loss)
 
                 if verbose:
-                    print(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
+                    logger.info(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
 
 
                 if self.early_stopping is not None:
                     self.early_stopping.check_early_stop(epoch_avg_valid_loss, self.model, epoch)
 
                     if self.early_stopping.stop_training:
-                        print('---------------------------------')
-                        print(f'Early Stopping: epoch {epoch}')
-                        print('---------------------------------')
+                        logger.info('---------------------------------')
+                        logger.info(f'Early Stopping: epoch {epoch}')
+                        logger.info('---------------------------------')
                         break
             
-        print('training finished')
+        logger.info('training finished')
         # when at end of training, save (if not a test)
         if not self.test:
             save_path_dict = path.Path(self.test_name, f"{self.test_name}_state_dict.pt") # overwrite is default
@@ -283,4 +286,4 @@ class CustomEarlyStopping:
                 # no improve count reaches patience, stop
                 self.stop_training = True
                 if self.verbose:
-                    print('Stopping Early')
+                    logger.info('Stopping Early')

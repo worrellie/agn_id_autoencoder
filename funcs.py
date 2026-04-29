@@ -19,6 +19,9 @@ import warnings
 # from ignite.engine import Engine, Events
 # from ignite.handlers import ModelCheckpoint
 
+import logging
+logger = logging.getLogger(__name__)
+
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
 def get_model_size_mb(model):
@@ -34,7 +37,7 @@ def get_model_size_mb(model):
 
     total_size_mb = (param_size + buffer_size) / 1024**2
 
-    print(f"model size: {total_size_mb}")
+    logger.info(f"model size: {total_size_mb}")
 
     return total_size_mb
 
@@ -57,13 +60,13 @@ def _loss_calc_batch(x_hat, x, x_mask, mu = None, logvar = None, beta = 0,):
 
     # mean mse for batch
     mean_masked_mse_for_batch = masked_mse_per_sample.sum() / batch_size
-    # print(f'masked recon loss (mean for batch): {mean_masked_mse_for_batch}')
+    # logger.info(f'masked recon loss (mean for batch): {mean_masked_mse_for_batch}')
 
     if mu is not None and logvar is not None: # (if is VAE)
         # kl divs in latent space (one for each dim of latent space):
         kl_divs = -0.5 * (1 + logvar - mu.pow(2) - logvar.exp()) 
         mean_kl_div_for_batch = kl_divs.sum() / batch_size
-        # print(f'mean_kl_div_for_batch: {mean_kl_div_for_batch}')
+        # logger.info(f'mean_kl_div_for_batch: {mean_kl_div_for_batch}')
     else:
         mean_kl_div_for_batch = torch.tensor(0.0).to(x.device)
     
@@ -166,9 +169,9 @@ def _get_example_specs(loader, model):
     if train_mean is not None and train_std is not None:
         normalize = True
     else:
-        print('not normalizing input data')
+        logger.info('not normalizing input data')
 
-    # print('predicting...')
+    # logger.info('predicting...')
     losses = []
     model.eval()
     with torch.no_grad():
@@ -197,7 +200,7 @@ def _get_example_specs(loader, model):
         "75th": np.percentile(losses, 75)
     }
 
-    print('getting min, max, mean and quartiles of losses...')
+    logger.info('getting min, max, mean and quartiles of losses...')
 
     idxs = []
     labels = []
@@ -225,7 +228,7 @@ def _predict_examples(subset_loader, model,):
     if train_mean is not None and train_std is not None:
         normalize = True
     else:
-        print('not normalizing input data')
+        logger.info('not normalizing input data')
 
     output = {'recon' : [],
               'original' : [], 
@@ -235,7 +238,7 @@ def _predict_examples(subset_loader, model,):
               'mean': train_mean,
               'std': train_std}
 
-    print('predicting min, max, mean and quartiles...')
+    logger.info('predicting min, max, mean and quartiles...')
 
     model.eval()
     with torch.no_grad():
@@ -340,14 +343,20 @@ def plot_examples(loader, model, test_params, test=False):
 
 def save_test_params(test_dict, test_name, test=False):
 
-    if test:
-        return
+    if test: return
 
-    path.Path(test_name).mkdir(parents=False, exist_ok = False)
+    path.Path(test_name).mkdir(parents=False, exist_ok = True) # folder should already exist
     path_name = path.Path(test_name, f"{test_name}_params.json")
 
     with open(path_name, 'w') as p:
         json.dump(test_dict, p, indent = 4)
+
+def make_test_dir(test_name, test=False):
+    
+    if test: return
+
+    path.Path(test_name).mkdir(parents=False, exist_ok = False)
+
 
 def global_stats(loader):
 

@@ -13,6 +13,9 @@ import math
 import pathlib as path
 import h5py
 
+import logging
+logger = logging.getLogger(__name__)
+
 class H5SpecDataset(torch.utils.data.Dataset):
 
     def __init__(self, data_path, split, flux_type = 'normalized_flux'):

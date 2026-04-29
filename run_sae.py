@@ -20,11 +20,25 @@ import training
 import argparse
 import time
 
-def main():
+import logging
+
+logger = logging.getLogger(__name__)
+
+
+def main(h5_file):
+
+    ###############
+    ###############
+    TESTING = False
+    verb = TESTING
+    ###############
+    ###############
+
+    # parse args
 
     parser = argparse.ArgumentParser()
 
-    parser.set_defaults(activation='ReLU', architecture=[{'in': 256,   'out': 64, },])
+    parser.set_defaults(activation='ReLU', architecture=[{'in': 256,   'out': 64, },], model_type='StandardAutoencoder')
 
     parser.add_argument('-e', '--epochs', default=10, type=int)
     parser.add_argument('-s', '--early_stop', action='store_true') # if -s is parsed, True is returned
@@ -44,75 +58,14 @@ def main():
     activation_funcs.add_argument('-t', '--tanh', dest='activation', action='store_const', const='Tanh')
     activation_funcs.add_argument('--leaky', dest='activation', action='store_const', const='LeakyReLU')
 
+    model_type = parser.add_mutually_exclusive_group()
+    model_type.add_argument('--sae', dest='model_type', action='store_const', const='StandardAutoencoder')
+    model_type.add_argument('--vae', dest='model_type', action='store_const', const='VariationalAutoencoder')
+
     args = parser.parse_args()
 
     #####################################################################################################
-    # get device
-    print(f"GPU available: {torch.cuda.is_available()}")
 
-    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
-    print(f"Device type: {device.type}")
-    if device.type == "cpu":
-        try:
-            num_threads = int(os.environ["SLURM_CPUS_PER_TASK"])
-        except:
-            num_threads = min(4, os.cpu_count())
-            print(f'cannot get SLURM_CPUS_PER_TASK, defaulting to {num_threads}')
-        finally:
-            torch.set_num_threads(num_threads)
-            print(f"num threads set to: {torch.get_num_threads()}")
-
-    ###############
-    ###############
-    TESTING = False
-    verb = TESTING
-
-    if TESTING:
-        batch_size_train = 2
-        batch_size_valid = 1
-    else:
-        batch_size_train = batch_size_valid = 64
-    ###############
-    ###############
-
-    #####################################################################################################
-    # Load data
-
-    DATA = "test_all_spectra.h5"
-
-    # default is normalised data
-    train = H5SpecDataset(DATA, split = "train")
-    valid = H5SpecDataset(DATA, split = "validation")
-
-    # # 
-    # for nw in [0, 2, 4, 8, 12]:
-    #     train_loader = torch.utils.data.DataLoader(train, batch_size=64, num_workers=nw)
-    #     start = time.time()
-        
-    #     for i, data in enumerate(train_loader):
-    #         if i > 10: break  # Just test the first few batches
-            
-    #     end = time.time()
-    #     print(f"num_workers: {nw} | Time per 10 batches: {end - start:.4f}s")
-    # # 
-
-    if device.type == "cpu":
-        if os.environ.get("SLURM_CPUS_PER_TASK") is not None:
-            num_workers = 8
-    else:
-        # if gpu or not cluster
-        num_workers = 0
-        
-
-    train_loader = torch.utils.data.DataLoader(train, batch_size = batch_size_train, shuffle = True, num_workers = num_workers)
-    valid_loader = torch.utils.data.DataLoader(valid, batch_size = batch_size_valid, shuffle = False,)
-
-    #################################################################################################
-
-
-    # intiate test paramters and stuff
-
-    INPUT_SIZE = train[0][0].shape[0]
     CONFIG = args.architecture
     LATENT_SIZE = args.latent
     ACTIVATION_FUNCTION = args.activation
@@ -122,13 +75,9 @@ def main():
     LEARNING_RATE = args.learn_rate
     WEIGHT_DECAY = args.weight_decay
 
-    #####################################
-    ############# make model ############
-    #####################################
-    model = ae.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
-    #####################################
+    #####################################################################################################
 
-    TEST_NAME = f'RUN_{model.type}_nl{len(CONFIG)}_ls{LATENT_SIZE}_e{EPOCHS}_{ACTIVATION_FUNCTION}_B{BETA:.0e}_lr{LEARNING_RATE:.0e}_wd{WEIGHT_DECAY}_es{EARLY_STOPPING}'
+    TEST_NAME = f'RUN_{args.model_type}_nl{len(CONFIG)}_ls{LATENT_SIZE}_e{EPOCHS}_{ACTIVATION_FUNCTION}_B{BETA:.0e}_lr{LEARNING_RATE:.0e}_wd{WEIGHT_DECAY}_es{EARLY_STOPPING}'
 
     counter = 1
     base_name = TEST_NAME
@@ -136,11 +85,78 @@ def main():
         TEST_NAME = f"{base_name}_{counter}"
         counter += 1
 
+    # make test dir
+    funcs.make_test_dir(TEST_NAME, test=TESTING)
+
+    #####################################################################################################
+    
+    # set up logger
+    log_path = os.path.join(TEST_NAME, 'output.log')
+
+    root_logger = logging.getLogger()
+    root_logger.setLevel(logging.INFO)
+
+    file_handler = logging.FileHandler(log_path)
+    console_handler = logging.StreamHandler()
+
+    formatter = logging.Formatter('%(asctime)s - %(name)s - %(levelname)s - %(message)s')
+    file_handler.setFormatter(formatter)
+    console_handler.setFormatter(formatter)
+
+    root_logger.addHandler(file_handler)
+    root_logger.addHandler(console_handler)
+
+    #####################################################################################################
+
+    # get device
+    logger.info(f"GPU available: {torch.cuda.is_available()}")
+
+    device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
+    logger.info(f"Device type: {device.type}")
+    if device.type == "cpu":
+        try:
+            num_threads = int(os.environ["SLURM_CPUS_PER_TASK"])
+        except:
+            num_threads = min(4, os.cpu_count())
+            logger.info(f'cannot get SLURM_CPUS_PER_TASK, defaulting to {num_threads}')
+        finally:
+            torch.set_num_threads(num_threads)
+            logger.info(f"num threads set to: {torch.get_num_threads()}")
+
+
+    #####################################################################################################
+    # Load data
+
+    if TESTING:
+        batch_size_train = 2
+        batch_size_valid = 1
+    else:
+        batch_size_train = batch_size_valid = 64
+
+    DATA = h5_file
+
+    # default is normalised data
+    train = H5SpecDataset(DATA, split = "train")
+    valid = H5SpecDataset(DATA, split = "validation")
+
+    if device.type == "cpu":
+        if os.environ.get("SLURM_CPUS_PER_TASK") is not None:
+            num_workers = 8
+    else:
+        # if gpu or not cluster
+        num_workers = 0
+
+    train_loader = torch.utils.data.DataLoader(train, batch_size = batch_size_train, shuffle = True, num_workers = num_workers)
+    valid_loader = torch.utils.data.DataLoader(valid, batch_size = batch_size_valid, shuffle = False,)
+
+    #################################################################################################
+
+    INPUT_SIZE = train[0][0].shape[0]
 
     test_params = {
         'test_name': TEST_NAME,
         'data_file': DATA,
-        'ae_type' : model.type,
+        'ae_type' : args.model_type,
         'config' : CONFIG,
         'latent_size' : LATENT_SIZE,
         'activation_function' : ACTIVATION_FUNCTION,
@@ -152,9 +168,15 @@ def main():
 
     funcs.save_test_params(test_params, TEST_NAME, test=TESTING)
 
+    if args.model_type == 'StandardAutoencoder':
+        model = ae.StandardAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
+    elif args.model_type == 'VariationalAutoencoder':
+        model = ae.VAEAutoencoder(CONFIG, INPUT_SIZE, LATENT_SIZE, activation = ACTIVATION_FUNCTION)
+    else:
+        exit()
     ######################################################################################################
 
-    print(model)
+    logger.info(model)
 
     if EARLY_STOPPING:
         early_stopping = training.CustomEarlyStopping(TEST_NAME, patience = 10, delta = 0.0, test = TESTING, verbose = verb)
@@ -162,7 +184,6 @@ def main():
         early_stopping = None
 
     optimizer = optim.Adam(model.parameters(), lr=LEARNING_RATE, weight_decay=WEIGHT_DECAY)
-
 
     # train
     torch.cuda.empty_cache()
@@ -172,7 +193,7 @@ def main():
     model, model_losses = trainer.train_ae(EPOCHS, train_loader, valid_loader = valid_loader, verbose = verb)
     stop = time.time()
 
-    print(f"{stop-start} seconds to train")
+    logger.info(f"{stop-start} seconds to train")
 
     funcs.plot_loss(model_losses, test_params['test_name'], test=TESTING)
 
@@ -180,4 +201,4 @@ def main():
 
 if __name__ == '__main__':
     
-    main()
+    main("test_all_spectra.h5")
