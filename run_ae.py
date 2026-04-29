@@ -70,12 +70,11 @@ def main(h5_file):
 
     #####################################################################################################
     # for running multiple tests in cluster
-    # change latent size
     if args.task_id is not None:
         test_configs = [
-            {'epochs': 100, 'latent': 10, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
             {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
-            {'epochs': 100, 'latent': 64, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 500, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 1000, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
             # add as many as you want
         ]
         c = test_configs[args.task_id]
