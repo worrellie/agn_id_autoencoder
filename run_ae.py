@@ -70,11 +70,78 @@ def main(h5_file):
 
     #####################################################################################################
     # for running multiple tests in cluster
-    if args.task_id is not None:
+    # change latent size
+    if args.task_id == 1:
         test_configs = [
             {'epochs': 100, 'latent': 10, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
             {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
             {'epochs': 100, 'latent': 64, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            # add as many as you want
+        ]
+        c = test_configs[args.task_id]
+        args.epochs     = c['epochs']
+        args.latent     = c['latent']
+        args.learn_rate = c['learn_rate']
+        args.beta       = c['beta']
+        args.model_type = c['model_type']
+        # map layers string to the architecture const
+        layer_map = {
+            '--layers-1': [{'in': 512, 'out': 256}],
+            '--layers-2': [{'in': 512, 'out': 256}, {'in': 256, 'out': 64}],
+            '--layers-3': [{'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
+            '--layers-4': [{'in': 700, 'out': 512}, {'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
+        }
+        args.architecture = layer_map[c['layers']]
+    # change number of epochs
+    elif arg.task_id == 2:
+        test_configs = [
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 500, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 1000, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            # add as many as you want
+        ]
+        c = test_configs[args.task_id]
+        args.epochs     = c['epochs']
+        args.latent     = c['latent']
+        args.learn_rate = c['learn_rate']
+        args.beta       = c['beta']
+        args.model_type = c['model_type']
+        # map layers string to the architecture const
+        layer_map = {
+            '--layers-1': [{'in': 512, 'out': 256}],
+            '--layers-2': [{'in': 512, 'out': 256}, {'in': 256, 'out': 64}],
+            '--layers-3': [{'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
+            '--layers-4': [{'in': 700, 'out': 512}, {'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
+        }
+        args.architecture = layer_map[c['layers']]
+    # change learning rate
+    elif arg.task_id == 3:
+        test_configs = [
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-2, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-3, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-5, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            # add as many as you want
+        ]
+        c = test_configs[args.task_id]
+        args.epochs     = c['epochs']
+        args.latent     = c['latent']
+        args.learn_rate = c['learn_rate']
+        args.beta       = c['beta']
+        args.model_type = c['model_type']
+        # map layers string to the architecture const
+        layer_map = {
+            '--layers-1': [{'in': 512, 'out': 256}],
+            '--layers-2': [{'in': 512, 'out': 256}, {'in': 256, 'out': 64}],
+            '--layers-3': [{'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
+            '--layers-4': [{'in': 700, 'out': 512}, {'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
+        }
+        args.architecture = layer_map[c['layers']]
+        # change number of hidden layers
+        elif arg.task_id == 4:
+        test_configs = [
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-1'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
             # add as many as you want
         ]
         c = test_configs[args.task_id]
