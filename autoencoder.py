@@ -143,20 +143,20 @@ class VAEAutoencoder(nn.Module):
         return x_hat, mu, logvar
 
 
-class CNNAutoencoder(nn.Module):
+# class CNNAutoencoder(nn.Module):
 
-    def __init__(self, config):
-        super(CNNAutoencoder, self).__init__()
+#     def __init__(self, config):
+#         super(CNNAutoencoder, self).__init__()
 
-        self.type = 'cnn'
+#         self.type = 'cnn'
 
-        self.act_func = getattr(nn, activation)() # make instance of desired activation function
+#         self.act_func = getattr(nn, activation)() # make instance of desired activation function
 
-        self.encoder_layers = nn.ModuleList()
-        self.decoder_layers = nn.ModuleList()
+#         self.encoder_layers = nn.ModuleList()
+#         self.decoder_layers = nn.ModuleList()
 
-        encoder = []
+#         encoder = []
 
-        in_channels = 1
-        for e in encoder:
-            self.encoder_layers.append(e)
+#         in_channels = 1
+#         for e in encoder:
+#             self.encoder_layers.append(e)
