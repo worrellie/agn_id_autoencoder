@@ -24,13 +24,20 @@ def main():
 
     parser = argparse.ArgumentParser()
 
-    parser.add_argument('-e', '--epochs', default=10, type=int)
-    parser.add_argument('-s', '--early_stop', action='store_false') # type=bool not recommended
-    parser.add_argument('-b', '--beta', default=0.0, type=float)
-    parser.add_argument('-l', '--learn_rate', default=1e-4, type=float)
-    parser.add_argument('-d', '--weight_decay', default=1e-8, type=float)
+    parser.set_defaults(activation='ReLU', architecture=[{'in': 256,   'out': 64, },])
 
-    parser.set_defaults(activation='ReLU', layers=[{'in': 256,   'out': 64, },], latent=32)
+    parser.add_argument('-e', '--epochs', default=10, type=int)
+    parser.add_argument('-s', '--early_stop', action='store_true') # if -s is parsed, True is returned
+    parser.add_argument('-b', '--beta', default=0.0, type=float)
+    parser.add_argument('--learn_rate', default=1e-4, type=float)
+    parser.add_argument('-d', '--weight_decay', default=1e-8, type=float)
+    parser.add_argument('-l', '--latent', default=32, type=int)
+
+    hidden_layers = parser.add_mutually_exclusive_group()
+    hidden_layers.add_argument('--layers-1', dest='architecture', action='store_const', const=[{'in': 512,   'out': 256, },])
+    hidden_layers.add_argument('--layers-2', dest='architecture', action='store_const', const=[{'in': 512,   'out': 256, }, {'in': 256,   'out': 64, }])
+    hidden_layers.add_argument('--layers-3', dest='architecture', action='store_const', const=[{'in': 512,   'out': 256, }, {'in': 256,   'out': 128, }, {'in': 128,   'out': 64, }])
+    hidden_layers.add_argument('--layers-4', dest='architecture', action='store_const', const=[{'in': 700,   'out': 512, }, {'in': 512,   'out': 256, }, {'in': 256,   'out': 128, }, {'in': 128,   'out': 64, }])
 
     activation_funcs = parser.add_mutually_exclusive_group()
     activation_funcs.add_argument('-r', '--relu', dest='activation', action='store_const', const='ReLU')
@@ -111,12 +118,9 @@ def main():
     # intiate test paramters and stuff
 
     INPUT_SIZE = train[0][0].shape[0]
-    CONFIG = [
-        {'in': 256,   'out': 64, },
-    ]
-    LATENT_SIZE = 32
+    CONFIG = args.architecture
+    LATENT_SIZE = args.latent
     ACTIVATION_FUNCTION = args.activation
-
     EPOCHS = args.epochs
     EARLY_STOPPING = args.early_stop
     BETA = args.beta # kl weighting only used in VAE, automatically set as 0 for other models
