@@ -75,7 +75,38 @@ def main(h5_file):
             {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
             {'epochs': 500, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
             {'epochs': 1000, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
-            # add as many as you want
+            # 
+            {'epochs': 100, 'latent': 10, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 64, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            #
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-2, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-6, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-8, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            #
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-1'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
+            # VAE
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 500, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 1000, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            # 
+            {'epochs': 100, 'latent': 10, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 64, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            #
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-2, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-6, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-8, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            #
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-1'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-2'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-3'},
+            #
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-1, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-6, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-9, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
         ]
         c = test_configs[args.task_id]
         args.epochs     = c['epochs']
