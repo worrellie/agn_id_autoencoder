@@ -38,6 +38,10 @@ def main(h5_file):
 
     parser = argparse.ArgumentParser()
 
+    # for parallelisation
+    parser.add_argument('--task_id', type=int, default=None)
+    #
+
     parser.set_defaults(activation='ReLU', architecture=[{'in': 256,   'out': 64, },], model_type='StandardAutoencoder')
 
     parser.add_argument('-e', '--epochs', default=10, type=int)
@@ -63,6 +67,30 @@ def main(h5_file):
     model_type.add_argument('--vae', dest='model_type', action='store_const', const='VariationalAutoencoder')
 
     args = parser.parse_args()
+
+    #####################################################################################################
+    # for running multiple tests in cluster
+    if args.task_id is not None:
+        test_configs = [
+            {'epochs': 100, 'latent': 10, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 64, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            # add as many as you want
+        ]
+        c = test_configs[args.task_id]
+        args.epochs     = c['epochs']
+        args.latent     = c['latent']
+        args.learn_rate = c['learn_rate']
+        args.beta       = c['beta']
+        args.model_type = c['model_type']
+        # map layers string to the architecture const
+        layer_map = {
+            '--layers-1': [{'in': 512, 'out': 256}],
+            '--layers-2': [{'in': 512, 'out': 256}, {'in': 256, 'out': 64}],
+            '--layers-3': [{'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
+            '--layers-4': [{'in': 700, 'out': 512}, {'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
+        }
+        args.architecture = layer_map[c['layers']]
 
     #####################################################################################################
 
