@@ -47,8 +47,6 @@ def main():
     architectures = parser.add_mutually_exclusive_group()
     architectures.add_argument('--layers-1', dest="architectures")
 
-
-
     args = parser.parse_args()
 
     #####################################################################################################
