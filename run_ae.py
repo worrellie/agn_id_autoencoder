@@ -112,6 +112,7 @@ def main(h5_file):
         args.epochs     = c['epochs']
         args.latent     = c['latent']
         args.learn_rate = c['learn_rate']
+        args.weight_decay = c['weight_decay']
         args.beta       = c['beta']
         args.model_type = c['model_type']
         # map layers string to the architecture const

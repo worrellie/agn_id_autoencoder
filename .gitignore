@@ -17,6 +17,8 @@ private_key.ppk
 test_all_spectra.h5
 
 tests*/
+all_spectra_sf_q/
+bulk_tests/
 
 RUN_*/
 
