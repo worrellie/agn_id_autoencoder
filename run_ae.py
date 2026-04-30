@@ -266,4 +266,4 @@ def main(h5_file):
 
 if __name__ == '__main__':
     
-    main("test_all_spectra.h5")
+    main("all_spectra_to_process_sf.h5")
