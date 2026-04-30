@@ -105,8 +105,8 @@ def main(h5_file):
             {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-3'},
             #
             {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-1, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-6, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-9, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-6, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-9, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-3'},
         ]
         c = test_configs[args.task_id]
         args.epochs     = c['epochs']
