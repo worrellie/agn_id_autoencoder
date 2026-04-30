@@ -76,9 +76,9 @@ def main(h5_file):
             # {'epochs': 500, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
             # {'epochs': 1000, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
             # 
-            {'epochs': 100, 'latent': 10, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
-            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
-            {'epochs': 100, 'latent': 64, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
+            {'epochs': 100, 'latent': 4, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
+            {'epochs': 100, 'latent': 6, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
+            {'epochs': 100, 'latent': 8, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
             #
             # {'epochs': 100, 'latent': 32, 'learn_rate': 1e-2, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
             # {'epochs': 100, 'latent': 32, 'learn_rate': 1e-6, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
