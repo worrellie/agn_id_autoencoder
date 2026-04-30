@@ -166,9 +166,8 @@ class Trainer:
             epoch_avg_loss = train_loss / processed_samples # average loss per sample 
             train_losses.append(epoch_avg_loss) # losses for each epoch
 
-            if verbose:
-                logger.info('-------------------------------------------')
-                logger.info(f'training: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_loss:.10f},\nmse: {epoch_avg_mse:.10f},\nkl: {epoch_avg_kl:e}')
+            logger.info('-------------------------------------------')
+            logger.info(f'training: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_loss:.10f},\nmse: {epoch_avg_mse:.10f},\nkl: {epoch_avg_kl:e}')
             
             if valid_loader is not None:
                 # dont update weights/ train
@@ -207,8 +206,7 @@ class Trainer:
                     epoch_avg_valid_loss = valid_loss / processed_samples_valid
                     valid_losses.append(epoch_avg_valid_loss)
 
-                if verbose:
-                    logger.info(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
+                logger.info(f'valid: epoch {epoch+1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}')
 
 
                 if self.early_stopping is not None:
