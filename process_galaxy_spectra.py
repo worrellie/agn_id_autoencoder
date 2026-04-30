@@ -12,7 +12,7 @@ import h5py
 # setup
 
 # input_dir = r'/test_data_for_processing' linux
-input_dir = r'test_data_for_processing'
+input_dir = r'test_all_spectra_sf_q'
 # input_dir = r'to_process'
 t = 1  # 1: noisy, 4: template
 exps = [1, 2, 4, 8]
@@ -24,7 +24,7 @@ output_dir = f'processed_{noise_type}_{input_dir}'
 
 os.makedirs(output_dir, exist_ok=True)
 
-h5_filename = 'test_all_spectra.h5'
+h5_filename = 'test_all_spectra_sf_q.h5'
 
 # run code
 
@@ -37,11 +37,11 @@ resampler = FluxConservingResampler(extrapolation_treatment = 'truncate')
 if os.environ.get('SLURM_CPUS_PER_TASK') is not None:
     print("running on cluster")
     cpus = os.environ.get('SLURM_CPUS_PER_TASK')
-    print(f"🚀 Starting parallel processing on {cpus} cores...")
+    print(f"Starting parallel processing on {cpus} cores...")
 else:
     print("running on non-cluster")
     cpus = multiprocessing.cpu_count() - 1  # Leave one core for the OS
-    print(f"🚀 Starting parallel processing on {cpus} cores...")
+    print(f"Starting parallel processing on {cpus} cores...")
 
 results = Parallel(n_jobs=cpus)(
     delayed(funcs.process_single_spec)(triplet, common_vals, grid_size, output_dir, resampler) 
@@ -49,8 +49,8 @@ results = Parallel(n_jobs=cpus)(
 )
 
 # at this point, should have a folder of all the processed spectra
-test_size_TESTING = 0.5
-files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename, test_size = test_size_TESTING)
+test_size = 0.2 # default
+files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename, test_size = test_size)
 
 funcs.save_h5(h5_filename, files, train_files, valid_files, test_files)
 

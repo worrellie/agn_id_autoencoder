@@ -74,6 +74,10 @@ class Trainer:
         else:
             logger.info('not normalizing input data')
 
+        # TESTING
+        normalize=False
+        logger.info("DATA NOT NORMALISED FOR TEST PURPOSES")
+
         self.model.to(self.device)
 
         train_losses = []
@@ -175,6 +179,8 @@ class Trainer:
                 with torch.no_grad(): 
 
                     processed_samples_valid = 0 
+
+                    # print('normalize for validation')
 
                     for x, x_mask in valid_loader:
                         if normalize:

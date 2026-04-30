@@ -89,6 +89,8 @@ def get_common_grid(input_dir, exps = [1, 2, 4, 8], de_z = 0.8):
 def get_channel_data(channel_path, t = 1):
 
     # returns raw wavelength, flux and template of given channel
+    # print(fits.getheader(channel_path))
+    # exit()
 
     flux = fits.getdata(channel_path, ext = t)
     f_templ = fits.getdata(channel_path, ext = 4)
@@ -100,8 +102,8 @@ def deredshift_channel(flux, l, z, de_z=0.8):
 
     # returns de-redshifted wavelength and flux
     
-    # flux_z = flux * ((1 + z)/(1 + de_z))
-    flux_z = flux
+    flux_z = flux * ((1 + z)/(1 + de_z))
+    # flux_z = flux
 
     l_z = (1 + de_z) * (l / (1 + z))
 
@@ -250,6 +252,10 @@ def calc_SNR(flux, l):
     mean_flux = np.mean(target_flux)
 
     snr = mean_flux/noise
+
+    # print(noise)
+    # print(mean_flux)
+    print(snr)
     # print('snr', snr)
 
     return mean_flux, noise, snr
@@ -402,8 +408,6 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
                 train_stats['raw_std'] = final_std_raw
                 train_stats['norm_mean'] = final_mean_norm
                 train_stats['norm_std'] = final_std_norm
-            
-
 
         if 'raw_mean' in train_stats:
             hf.attrs['raw_mean'] = train_stats['raw_mean']
