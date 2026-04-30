@@ -119,7 +119,7 @@ def main(h5_file):
             '--layers-1': [{'in': 512, 'out': 256}],
             '--layers-2': [{'in': 512, 'out': 256}, {'in': 256, 'out': 64}],
             '--layers-3': [{'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
-            '--layers-4': [{'in': 700, 'out': 512}, {'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}],
+            '--layers-4': [{'in': 512, 'out': 256}, {'in': 256, 'out': 128}, {'in': 128, 'out': 64}, {'in': 64, 'out': 64}],
         }
         args.architecture = layer_map[c['layers']]
     
@@ -212,7 +212,8 @@ def main(h5_file):
     #################################################################################################
 
     INPUT_SIZE = train[0][0].shape[0]
-    logger.info(f"Number of sources: {train.__len__()}")
+    logger.info(f"Number of training sources: {train.__len__()}")
+    logger.info(f"Number of validation sources: {valid.__len__()}")
     logger.info(f"Size of one sample: {INPUT_SIZE}")
 
 
