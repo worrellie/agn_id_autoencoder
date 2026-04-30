@@ -178,6 +178,10 @@ class Trainer:
                 self.model.eval() 
                 with torch.no_grad(): 
 
+                    first_param = next(self.model.parameters())
+                    logger.info(f'epoch {epoch} first param mean: {first_param.data.mean():.6f}')
+                    logger.info(f'epoch {epoch} first x_hat mean: check below')
+
                     processed_samples_valid = 0 
 
                     # print('normalize for validation')
@@ -191,6 +195,9 @@ class Trainer:
                         x_mask = x_mask.to(self.device)
 
                         x_hat, mu, logvar = self.model(x)
+
+                        logger.info(f'valid x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}')
+                        break
 
                         mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = self.beta) # 'mean' gives loss per sample for batch
 
