@@ -197,9 +197,10 @@ class Trainer:
                         x_hat, mu, logvar = self.model(x)
 
                         logger.info(f'valid x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}')
-                        break
 
                         mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu = mu, logvar = logvar, beta = self.beta) # 'mean' gives loss per sample for batch
+                        
+                        print(x.size(0))
 
                         valid_mse += mse.item() * x.size(0) # reconstruction loss
                         valid_kl += kl.item() * x.size(0) # kl divergence
