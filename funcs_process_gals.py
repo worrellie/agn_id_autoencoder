@@ -548,12 +548,12 @@ def process_single_spec(triplet, common_vals, grid_size, output_dir, resampler):
         	channel_pairs.append([f_rebinned, l_rebinned])
 
     	# SNR and Merging
-    	_, _, snr = calc_SNR(np.asarray(original_flux_rest), np.asarray(original_l_rest))
+    	norm_factor, _, snr = calc_SNR(np.asarray(original_flux_rest), np.asarray(original_l_rest))
     	spec_flux, spec_l = merge_channels(channel_pairs, grid_size=grid_size)
     	final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
 
     	# Save
-    	save_spec(final_spec_flux, final_spec_l, redshift, snr, np.mean(final_spec_flux), base_name, output_dir)
+    	save_spec(final_spec_flux, final_spec_l, redshift, snr, norm_factor, base_name, output_dir)
     	return base_name # Useful for tracking progress
 
     except Exception as e:

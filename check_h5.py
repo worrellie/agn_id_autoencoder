@@ -1,6 +1,7 @@
 import h5py
 import numpy as np
 import matplotlib.pyplot as plt
+import random
 
 def check_h5(file): 
 
@@ -38,4 +39,29 @@ def check_h5(file):
 #     check_h5(f)
 
 
-check_h5("test_all_spectra_sf_q")
+# check_h5("test_all_spectra_sf_q")
+
+# import h5py
+# import numpy as np
+
+# with h5py.File('all_spectra_to_process_sf.h5', 'r') as hf:
+#     print("Keys in train:", list(hf['train'].keys()))
+#     s = hf['train']['normalized_flux'][0]
+#     print("First spectrum:", s[:10])
+#     print("Unique values:", np.unique(s))
+#     print("Mean:", s.mean())
+
+with h5py.File('test_all_spectra_sf_q.h5', 'r') as hf:
+    print(f"norm_mean: {hf.attrs['norm_mean']}")
+    print(f"norm_std:  {hf.attrs['norm_std']}")
+    print(f"raw_mean:  {hf.attrs['raw_mean']}")
+    print(f"raw_std:   {hf.attrs['raw_std']}")
+    
+    # also check a few individual normalized spectra means
+    print("\nMean of 5 random normalized_flux spectra (train):")
+    random_idxs = random.sample(range(len(hf['train']['normalized_flux'])), 5)
+    print(random_idxs)
+    for i in random_idxs:
+        s = hf['train']['normalized_flux'][i]
+        mask = s != 0
+        print(f"  spec {i}: full mean={s.mean():.6f}, unmasked mean={s[mask].mean():.6f}")

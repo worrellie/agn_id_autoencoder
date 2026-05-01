@@ -268,8 +268,8 @@ def main(h5_file):
 
     funcs.plot_loss(model_losses, test_params['test_name'], test=TESTING)
 
-    # funcs.plot_examples(train_loader, model, test_params, test = TESTING)
-    funcs.plot_examples(valid_loader, model, test_params, test = TESTING)
+    funcs.plot_examples(train_loader, model, test_params, test = TESTING)
+    # funcs.plot_examples(valid_loader, model, test_params, test = TESTING)
 
 if __name__ == '__main__':
     

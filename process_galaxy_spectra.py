@@ -50,6 +50,7 @@ results = Parallel(n_jobs=cpus)(
 
 # at this point, should have a folder of all the processed spectra
 test_size = 0.2 # default
+# test_size = 0.5 # TESTING
 files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename, test_size = test_size)
 
 funcs.save_h5(h5_filename, files, train_files, valid_files, test_files)
