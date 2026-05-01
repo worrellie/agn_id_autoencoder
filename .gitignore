@@ -15,10 +15,15 @@ processed_*/
 to_process*/
 private_key.ppk
 test_all_spectra.h5
+test_spectra_sf.h5
+test_all_spectra_sf_q.h5
+all_spectra_to_process_sf.h5
+all_spectra_to_process_q.h5
 
 tests*/
 all_spectra_sf_q/
 bulk_tests/
+
 
 RUN_*/
 
