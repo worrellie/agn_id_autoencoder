@@ -291,10 +291,27 @@ def sklearn_split_data(processed_dir, h5_filename, test_size = 0.2, norm = False
         print(f"No files found in {processed_dir}! Check your path and naming.")
         return
 
-    train_files, temp_files = train_test_split(files, test_size=test_size, random_state=RND)
-    valid_files, test_files = train_test_split(temp_files, test_size=0.5, random_state=RND)
+    groups = {tag: [f for f in files if tag in os.path.basename(f)]
+              for tag in ['1h', '2h', '4h', '8h']}
 
-    return files, train_files, valid_files, test_files
+
+    all_train = []
+    all_valid = []
+    all_test = []
+
+    for tag, group in groups.items():
+        print(f'{tag} has: {len(group)} sources')
+        if not group:
+            print(f'no files found of {tag} exposure time')
+            continue # leave loop iteration and go to next
+        train_files, temp_files = train_test_split(group, test_size=test_size, random_state=RND)
+        valid_files, test_files = train_test_split(temp_files, test_size=0.5, random_state=RND)
+        all_train.extend(train_files)
+        all_valid.extend(valid_files)
+        all_test.extend(test_files)
+
+
+    return files, all_train, all_valid, all_test
 
 def save_h5(h5_filename, files, train_files, valid_files, test_files):
 
