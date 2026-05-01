@@ -72,13 +72,13 @@ def main(h5_file):
     # for running multiple tests in cluster
     if args.task_id is not None:
         test_configs = [
-            # {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
-            # {'epochs': 500, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
-            # {'epochs': 1000, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 500, 'latent': 32, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
+            {'epochs': 1000, 'latent': 32, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
 
-            {'epochs': 100, 'latent': 4, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
-            {'epochs': 100, 'latent': 6, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
-            {'epochs': 100, 'latent': 8, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
+            # {'epochs': 100, 'latent': 4, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
+            # {'epochs': 100, 'latent': 6, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
+            # {'epochs': 100, 'latent': 8, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
             # 
             # {'epochs': 100, 'latent': 4, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
             # {'epochs': 100, 'latent': 6, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
@@ -273,4 +273,4 @@ def main(h5_file):
 
 if __name__ == '__main__':
     
-    main("test_all_spectra_sf_q.h5")
+    main("all_spectra.h5")
