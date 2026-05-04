@@ -237,26 +237,22 @@ def calc_SNR(flux, l):
     flux = np.asarray(flux)
     l = np.asarray(l)
 
-    # check that 5100 to 5800 is in rest frame l
     target_mask = (l >=5100) & (l <= 5800) & (flux!=0)
-
-    assert len(flux) == len(target_mask)
 
     target_flux = flux[target_mask]
     # print(len(target_flux))
     if target_flux.size<2:
         print('could not get snr')
-        return 0.0,0.0, 0.0
+        return 0.0, 0.0, 0.0
     
     noise = np.std(target_flux)
     mean_flux = np.mean(target_flux)
 
-    snr = mean_flux/noise
+    if noise == 0:
+        print('could not get snr, zrero noise')
+        retrun mean_flux, 0.0, 0.0
 
-    # print(noise)
-    # print(mean_flux)
-    print(snr)
-    # print('snr', snr)
+    snr = mean_flux/noise
 
     return mean_flux, noise, snr
 
@@ -568,6 +564,11 @@ def process_single_spec(triplet, common_vals, grid_size, output_dir, resampler):
     	norm_factor, _, snr = calc_SNR(np.asarray(original_flux_rest), np.asarray(original_l_rest))
     	spec_flux, spec_l = merge_channels(channel_pairs, grid_size=grid_size)
     	final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
+
+        # check masking
+        mask = (final_spec_flux == 0)
+        if mask.all():
+            print(f'Fully masked spectrum: {base_name}')
 
     	# Save
     	save_spec(final_spec_flux, final_spec_l, redshift, snr, norm_factor, base_name, output_dir)

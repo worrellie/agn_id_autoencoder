@@ -4,74 +4,78 @@ from specutils.manipulation import FluxConservingResampler
 from joblib import Parallel, delayed
 import multiprocessing
 import h5py
+import argparse
 
-################
-##### main #####
-################
+def main():
 
-# setup
 
-# input_dir = r'/test_data_for_processing' linux
-input_dir = r'test_all_spectra_sf_q'
-# input_dir = r'to_process'
-t = 1  # 1: noisy, 4: template
-exps = [1, 2, 4, 8]
+    parser = argparse.ArgumentParser()
 
-# Define output directory
-# normalised = "norm_" if norm else ""
-noise_type = "noisy" if t == 1 else "noiseless"
-output_dir = f'processed_{noise_type}_{input_dir}'
+    parser.add_argument('--folder', '-f', default = r'test_all_spectra_sf_q')
 
-os.makedirs(output_dir, exist_ok=True)
+    # setup
 
-h5_filename = 'test_all_spectra_sf_q.h5'
+    args = parser.parse_args()
 
-# run code
+    input_dir = args.folder
 
-grid_size = 4.0
+    t = 1  # 1: noisy, 4: template
+    exps = [1, 2, 4, 8]
 
-common_vals, valid_triplets = funcs.get_common_grid(input_dir, de_z = 0.8)
+    # Define output directory
+    # normalised = "norm_" if norm else ""
+    noise_type = "noisy" if t == 1 else "noiseless"
+    output_dir = f'processed_{noise_type}_{input_dir}'
 
-resampler = FluxConservingResampler(extrapolation_treatment = 'truncate')
+    os.makedirs(output_dir, exist_ok=True)
 
-if os.environ.get('SLURM_CPUS_PER_TASK') is not None:
-    print("running on cluster")
-    cpus = os.environ.get('SLURM_CPUS_PER_TASK')
-    print(f"Starting parallel processing on {cpus} cores...")
-else:
-    print("running on non-cluster")
-    cpus = multiprocessing.cpu_count() - 1  # Leave one core for the OS
-    print(f"Starting parallel processing on {cpus} cores...")
+    h5_filename = fr'{input_dir}.h5'
 
-results = Parallel(n_jobs=cpus)(
-    delayed(funcs.process_single_spec)(triplet, common_vals, grid_size, output_dir, resampler) 
-    for triplet in valid_triplets
-)
+    # run code
 
-# at this point, should have a folder of all the processed spectra
-# test_size = 0.2 # default
-test_size = 0.4 # TESTING
-files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename, test_size = test_size)
+    grid_size = 4.0
 
-# print(train_files)
-# print(valid_files)
-# print(test_files)
+    common_vals, valid_triplets = funcs.get_common_grid(input_dir, de_z = 0.8)
 
-funcs.save_h5(h5_filename, files, train_files, valid_files, test_files)
+    resampler = FluxConservingResampler(extrapolation_treatment = 'truncate')
 
-# update h5 with train set stats
-# compute_and_save_stats('test_all_spectra.h5', )
+    if os.environ.get('SLURM_CPUS_PER_TASK') is not None:
+        print("running on cluster")
+        cpus = os.environ.get('SLURM_CPUS_PER_TASK')
+        print(f"Starting parallel processing on {cpus} cores...")
+    else:
+        print("running on non-cluster")
+        cpus = multiprocessing.cpu_count() - 1  # Leave one core for the OS
+        print(f"Starting parallel processing on {cpus} cores...")
 
-# check h5
-with h5py.File(h5_filename, 'r') as hf:
-    print(f"\n📑 Root Attributes:")
-    for attr in hf.attrs:
-        print(f"  - {attr}: {hf.attrs[attr]}")
-    
-    print("\n🌳 File Structure:")
-    hf.visititems(funcs.check_h5_structure)
-print("/n---------------------------------------------/n")
+    results = Parallel(n_jobs=cpus)(
+        delayed(funcs.process_single_spec)(triplet, common_vals, grid_size, output_dir, resampler) 
+        for triplet in valid_triplets
+    )
 
-# check_h5_samples(h5_filename, norm = False)
-funcs.check_h5_samples(h5_filename, norm = True)
+    # at this point, should have a folder of all the processed spectra
+    files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename)
+    # files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename, test_size = test_size)
+
+    # print(train_files)
+    # print(valid_files)
+    # print(test_files)
+
+    funcs.save_h5(h5_filename, files, train_files, valid_files, test_files)
+
+    # update h5 with train set stats
+    # compute_and_save_stats('test_all_spectra.h5', )
+
+    # check h5
+    with h5py.File(h5_filename, 'r') as hf:
+        print(f"\n📑 Root Attributes:")
+        for attr in hf.attrs:
+            print(f"  - {attr}: {hf.attrs[attr]}")
+        
+        print("\n🌳 File Structure:")
+        hf.visititems(funcs.check_h5_structure)
+    print("/n---------------------------------------------/n")
+
+    # check_h5_samples(h5_filename, norm = False)
+    funcs.check_h5_samples(h5_filename, norm = True)
 
