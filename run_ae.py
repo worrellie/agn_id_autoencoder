@@ -423,4 +423,4 @@ def main():
 
 
 if __name__ == "__main__":
-	main("all_spectra.h5")
+	main()
