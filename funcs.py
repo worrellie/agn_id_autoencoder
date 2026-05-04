@@ -54,16 +54,16 @@ def _loss_calc_batch(
 	"""
 	function to get average loss of batch
 	"""
-	print(f"x_hat : {x_hat.shape}")
-	print(f"x : {x.shape}")
-	print(f"x_mask : {x_mask.shape}")
+	# print(f"x_hat : {x_hat.shape}")
+	# print(f"x : {x.shape}")
+	# print(f"x_mask : {x_mask.shape}")
 
 	batch_size = x_hat.shape[0]
 	n_unmasked_pixels = x_mask.sum(dim=1)
 
 	# pixel-wise
 	sq_err_per_element = (x_hat - x) ** 2
-	print(f"sq err : {sq_err_per_element.shape}")
+	# print(f"sq err : {sq_err_per_element.shape}")
 	# torch.set_printoptions(profile="full")
 	# print(x_hat)
 	# print(x)
@@ -72,15 +72,15 @@ def _loss_calc_batch(
 
 	# apply masks
 	masked_sq_err = sq_err_per_element * x_mask
-	print(f"mased sq err : {masked_sq_err.shape}")
+	# print(f"mased sq err : {masked_sq_err.shape}")
 
 	# mse per spec
 	masked_mse_per_sample = masked_sq_err.sum(dim=1) / n_unmasked_pixels
-	print(f"masked mean per sample: {masked_mse_per_sample.shape}")
+	# print(f"masked mean per sample: {masked_mse_per_sample.shape}")
 
 	# mean mse for batch
 	mean_masked_mse_for_batch = masked_mse_per_sample.sum() / batch_size
-	print(f"masked mean batch : {mean_masked_mse_for_batch.shape}")
+	# print(f"masked mean batch : {mean_masked_mse_for_batch.shape}")
 	# logger.info(f'masked recon loss (mean for batch): {mean_masked_mse_for_batch}')
 
 	if mu is not None and logvar is not None:  # (if is VAE)

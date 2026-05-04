@@ -244,7 +244,7 @@ class Trainer:
 							x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta
 						)  # 'mean' gives loss per sample for batch
 
-						print(x.size(0))
+						# print(x.size(0))
 
 						valid_mse += mse.item() * x.size(0)  # reconstruction loss
 						valid_kl += kl.item() * x.size(0)  # kl divergence
