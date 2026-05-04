@@ -25,7 +25,7 @@ import logging
 logger = logging.getLogger(__name__)
 
 
-def main(h5_file):
+def main():
 
     ###############
     ###############
@@ -52,6 +52,8 @@ def main(h5_file):
         ],
         model_type="StandardAutoencoder",
     )
+
+	parser.add_argument("-f", "--filename", default='all_spectra.h5' )
 
     parser.add_argument("-e", "--epochs", default=10, type=int)
     parser.add_argument(
@@ -329,7 +331,7 @@ def main(h5_file):
     else:
         batch_size_train = batch_size_valid = 64
 
-    DATA = h5_file
+    DATA = args.filename
 
     # default is normalised data
     train = H5SpecDataset(DATA, split="train")
