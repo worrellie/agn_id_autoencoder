@@ -250,7 +250,7 @@ def calc_SNR(flux, l):
 
     if noise == 0:
         print('could not get snr, zrero noise')
-        retrun mean_flux, 0.0, 0.0
+        return mean_flux, 0.0, 0.0
 
     snr = mean_flux/noise
 
