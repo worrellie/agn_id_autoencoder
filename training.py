@@ -116,6 +116,7 @@ class Trainer:
 
 				# for understanding exploding gradient problem
 				# check min and max incoming x values
+				all_vals = []
 				all_vals.append(x[x_mask])
 				if len(all_vals) > 20:
 					break
