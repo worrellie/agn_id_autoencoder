@@ -34,7 +34,7 @@ def get_common_grid(input_dir, exps = [1, 2, 4, 8], de_z = 0.8):
 	# quickly runs through all fits files to get the common wavelength range
 	# of all files once they are de-redshifted.
 	# returns: common range as a length 2 list: [min, max]
-	#          all valid file triplets as list of tuples:[(ri, yj, h, z), ...]
+	#		  all valid file triplets as list of tuples:[(ri, yj, h, z), ...]
 
 	all_rest_mins = []
 	all_rest_maxs = []
@@ -339,9 +339,9 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
 			# # Datasets using float64 (f8) for high precision as requested
 			# # We now create TWO flux datasets: raw and normalized
 			# if norm:
-			#     d_flux_norm = group.create_dataset('normalized_flux', (n_samples, n_pixels), 
-			#                                     dtype='f8', compression='gzip', chunks=True)
-			#     d_norm_fac = group.create_dataset('norm_factor', (n_samples,), dtype='f8')
+			#	 d_flux_norm = group.create_dataset('normalized_flux', (n_samples, n_pixels), 
+			#									 dtype='f8', compression='gzip', chunks=True)
+			#	 d_norm_fac = group.create_dataset('norm_factor', (n_samples,), dtype='f8')
 			d_flux_norm = group.create_dataset('normalized_flux', (n_samples, n_pixels), 
 												dtype='f8', compression='gzip', chunks=(1, n_pixels))
 
@@ -371,7 +371,7 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
 						norm_factor = hdul[1].header.get('NORMFAC')
 						if norm_factor is None or norm_factor == 0 or np.isnan(norm_factor):
 							warnings.warn(f"Invalid NORMFAC ({norm_factor}) in {os.path.basename(f)}. Defaulting to 1.0.")
-							norm_factor = 1.0                            
+							norm_factor = 1.0							
 						norm_flux = current_flux/norm_factor
 						if split_name == "train":
 							mask = (current_flux!=0) & (~np.isnan(current_flux)) & (~np.isnan(norm_flux))
@@ -389,9 +389,9 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
 
 						# print(norm_factor)
 						# if norm:
-						#     norm_factor = hdul[0].header.get('NORMFAC', 1.0)
-						#     d_flux_norm[i] = current_flux
-						#     d_norm_fac[i] = norm_factor
+						#	 norm_factor = hdul[0].header.get('NORMFAC', 1.0)
+						#	 d_flux_norm[i] = current_flux
+						#	 d_norm_fac[i] = norm_factor
 
 						d_z[i] = redshift
 						d_snr[i] = snr

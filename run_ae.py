@@ -113,11 +113,11 @@ def main(h5_file):
 			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-9, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-3'},
 		]
 		c = test_configs[args.task_id]
-		args.epochs     = c['epochs']
-		args.latent     = c['latent']
+		args.epochs	 = c['epochs']
+		args.latent	 = c['latent']
 		args.learn_rate = c['learn_rate']
 		args.weight_decay = c['weight_decay']
-		args.beta       = c['beta']
+		args.beta	   = c['beta']
 		args.model_type = c['model_type']
 		# map layers string to the architecture const
 		layer_map = {
