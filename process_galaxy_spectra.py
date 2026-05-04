@@ -9,77 +9,77 @@ import argparse
 def main():
 
 
-    parser = argparse.ArgumentParser()
+	parser = argparse.ArgumentParser()
 
-    parser.add_argument('--folder', '-f', default = r'test_all_spectra_sf_q')
+	parser.add_argument('--folder', '-f', default = r'test_all_spectra_sf_q')
 
-    # setup
+	# setup
 
-    args = parser.parse_args()
+	args = parser.parse_args()
 
-    input_dir = args.folder
+	input_dir = args.folder
 
-    t = 1  # 1: noisy, 4: template
-    exps = [1, 2, 4, 8]
+	t = 1  # 1: noisy, 4: template
+	exps = [1, 2, 4, 8]
 
-    # Define output directory
-    # normalised = "norm_" if norm else ""
-    noise_type = "noisy" if t == 1 else "noiseless"
-    output_dir = f'processed_{noise_type}_{input_dir}'
+	# Define output directory
+	# normalised = "norm_" if norm else ""
+	noise_type = "noisy" if t == 1 else "noiseless"
+	output_dir = f'processed_{noise_type}_{input_dir}'
 
-    os.makedirs(output_dir, exist_ok=True)
+	os.makedirs(output_dir, exist_ok=True)
 
-    h5_filename = fr'{input_dir}.h5'
+	h5_filename = fr'{input_dir}.h5'
 
-    # run code
+	# run code
 
-    grid_size = 4.0
+	grid_size = 4.0
 
-    common_vals, valid_triplets = funcs.get_common_grid(input_dir, de_z = 0.8)
+	common_vals, valid_triplets = funcs.get_common_grid(input_dir, de_z = 0.8)
 
-    resampler = FluxConservingResampler(extrapolation_treatment = 'truncate')
+	resampler = FluxConservingResampler(extrapolation_treatment = 'truncate')
+	
+	if os.environ.get('SLURM_CPUS_PER_TASK') is not None:
+		print("running on cluster")
+		cpus = os.environ.get('SLURM_CPUS_PER_TASK')
+		print(f"Starting parallel processing on {cpus} cores...")
+	else:
+		print("running on non-cluster")
+		cpus = multiprocessing.cpu_count() - 1  # Leave one core for the OS
+		print(f"Starting parallel processing on {cpus} cores...")
 
-    if os.environ.get('SLURM_CPUS_PER_TASK') is not None:
-        print("running on cluster")
-        cpus = os.environ.get('SLURM_CPUS_PER_TASK')
-        print(f"Starting parallel processing on {cpus} cores...")
-    else:
-        print("running on non-cluster")
-        cpus = multiprocessing.cpu_count() - 1  # Leave one core for the OS
-        print(f"Starting parallel processing on {cpus} cores...")
+	results = Parallel(n_jobs=cpus)(
+		delayed(funcs.process_single_spec)(triplet, common_vals, grid_size, output_dir, resampler) 
+		for triplet in valid_triplets
+	)
 
-    results = Parallel(n_jobs=cpus)(
-        delayed(funcs.process_single_spec)(triplet, common_vals, grid_size, output_dir, resampler) 
-        for triplet in valid_triplets
-    )
+	# at this point, should have a folder of all the processed spectra
+	files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename)
+	# files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename, test_size = test_size)
 
-    # at this point, should have a folder of all the processed spectra
-    files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename)
-    # files, train_files, valid_files, test_files = funcs.sklearn_split_data(output_dir, h5_filename, test_size = test_size)
+	# print(train_files)
+	# print(valid_files)
+	# print(test_files)
 
-    # print(train_files)
-    # print(valid_files)
-    # print(test_files)
+	funcs.save_h5(h5_filename, files, train_files, valid_files, test_files)
 
-    funcs.save_h5(h5_filename, files, train_files, valid_files, test_files)
+	# update h5 with train set stats
+	# compute_and_save_stats('test_all_spectra.h5', )
 
-    # update h5 with train set stats
-    # compute_and_save_stats('test_all_spectra.h5', )
+	# check h5
+	with h5py.File(h5_filename, 'r') as hf:
+		print(f"\n📑 Root Attributes:")
+		for attr in hf.attrs:
+			print(f"  - {attr}: {hf.attrs[attr]}")
+		
+		print("\n🌳 File Structure:")
+		hf.visititems(funcs.check_h5_structure)
+	print("/n---------------------------------------------/n")
 
-    # check h5
-    with h5py.File(h5_filename, 'r') as hf:
-        print(f"\n📑 Root Attributes:")
-        for attr in hf.attrs:
-            print(f"  - {attr}: {hf.attrs[attr]}")
-        
-        print("\n🌳 File Structure:")
-        hf.visititems(funcs.check_h5_structure)
-    print("/n---------------------------------------------/n")
-
-    # check_h5_samples(h5_filename, norm = False)
-    funcs.check_h5_samples(h5_filename, norm = True)
+	# check_h5_samples(h5_filename, norm = False)
+	funcs.check_h5_samples(h5_filename, norm = True)
 
 
 if __name__ == '__main__':
-    
-    main()
+	
+	main()
