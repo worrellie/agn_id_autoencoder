@@ -21,138 +21,138 @@ logger = logging.getLogger(__name__)
 
 
 class StandardAutoencoder(nn.Module):
-    def __init__(self, config, input_size, latent_size, activation="ReLU"):
-        super(StandardAutoencoder, self).__init__()
+	def __init__(self, config, input_size, latent_size, activation="ReLU"):
+		super(StandardAutoencoder, self).__init__()
 
-        self.act_func = getattr(
-            nn, activation
-        )()  # make instance of desired activation function
+		self.act_func = getattr(
+			nn, activation
+		)()  # make instance of desired activation function
 
-        self.encoder_layers = nn.ModuleList()
-        self.decoder_layers = nn.ModuleList()
+		self.encoder_layers = nn.ModuleList()
+		self.decoder_layers = nn.ModuleList()
 
-        self.type = "sae"
+		self.type = "sae"
 
-        self.input_to_encoder = nn.Linear(input_size, config[0]["in"])
+		self.input_to_encoder = nn.Linear(input_size, config[0]["in"])
 
-        # add encoder layers
-        for c in config:
-            self.encoder_layers.append(
-                nn.Linear(
-                    c["in"],
-                    c["out"],
-                )
-            )
+		# add encoder layers
+		for c in config:
+			self.encoder_layers.append(
+				nn.Linear(
+					c["in"],
+					c["out"],
+				)
+			)
 
-        self.encoder_to_latent = nn.Linear(config[-1]["out"], latent_size)
+		self.encoder_to_latent = nn.Linear(config[-1]["out"], latent_size)
 
-        # add decoder layers
-        for c in reversed(config):
-            self.decoder_layers.append(
-                nn.Linear(
-                    c["out"],
-                    c["in"],
-                )
-            )
+		# add decoder layers
+		for c in reversed(config):
+			self.decoder_layers.append(
+				nn.Linear(
+					c["out"],
+					c["in"],
+				)
+			)
 
-        self.decoder_from_latent = nn.Linear(latent_size, config[-1]["out"])
+		self.decoder_from_latent = nn.Linear(latent_size, config[-1]["out"])
 
-        self.decoder_to_output = nn.Linear(config[0]["in"], input_size)
+		self.decoder_to_output = nn.Linear(config[0]["in"], input_size)
 
-    def forward(self, x):
+	def forward(self, x):
 
-        x = self.act_func(self.input_to_encoder(x))
+		x = self.act_func(self.input_to_encoder(x))
 
-        for l in self.encoder_layers:
-            x = self.act_func(l(x))
+		for l in self.encoder_layers:
+			x = self.act_func(l(x))
 
-        z = self.act_func(self.encoder_to_latent(x))
+		z = self.act_func(self.encoder_to_latent(x))
 
-        z = self.act_func(self.decoder_from_latent(z))
+		z = self.act_func(self.decoder_from_latent(z))
 
-        for l in self.decoder_layers:
-            z = self.act_func(l(z))
+		for l in self.decoder_layers:
+			z = self.act_func(l(z))
 
-        x_hat = self.decoder_to_output(z)
+		x_hat = self.decoder_to_output(z)
 
-        return x_hat, None, None
+		return x_hat, None, None
 
 
 class VAEAutoencoder(nn.Module):
-    def __init__(self, config, input_size, latent_size, activation="ReLU"):
-        super(VAEAutoencoder, self).__init__()
+	def __init__(self, config, input_size, latent_size, activation="ReLU"):
+		super(VAEAutoencoder, self).__init__()
 
-        self.type = "vae"
+		self.type = "vae"
 
-        self.act_func = getattr(
-            nn, activation
-        )()  # make instance of desired activation function
+		self.act_func = getattr(
+			nn, activation
+		)()  # make instance of desired activation function
 
-        self.encoder_layers = nn.ModuleList()
-        self.decoder_layers = nn.ModuleList()
+		self.encoder_layers = nn.ModuleList()
+		self.decoder_layers = nn.ModuleList()
 
-        self.input_to_encoder = nn.Linear(input_size, config[0]["in"])
+		self.input_to_encoder = nn.Linear(input_size, config[0]["in"])
 
-        # add encoder layers
-        for c in config:
-            self.encoder_layers.append(
-                nn.Linear(
-                    c["in"],
-                    c["out"],
-                )
-            )
+		# add encoder layers
+		for c in config:
+			self.encoder_layers.append(
+				nn.Linear(
+					c["in"],
+					c["out"],
+				)
+			)
 
-        # ###### this is cool- remember for future
-        # def _get_flattened_size(self, input_size):
+		# ###### this is cool- remember for future
+		# def _get_flattened_size(self, input_size):
 
-        # with torch.no_grad(): # do not update weights
+		# with torch.no_grad(): # do not update weights
 
-        # dummy_x = torch.zeros(1, 1, input_size)
-        # for l in self.encoder_layers:
-        # dummy_x = l(dummy_x) # updates the dummy shape based on the encoder layers
+		# dummy_x = torch.zeros(1, 1, input_size)
+		# for l in self.encoder_layers:
+		# dummy_x = l(dummy_x) # updates the dummy shape based on the encoder layers
 
-        # return dummy_x.numel(), dummy_x.shape[1], dummy_x.shape[2]
-        # ######
+		# return dummy_x.numel(), dummy_x.shape[1], dummy_x.shape[2]
+		# ######
 
-        # add decoder layers
-        for c in reversed(config):
-            self.decoder_layers.append(
-                nn.Linear(
-                    c["out"],
-                    c["in"],
-                )
-            )
+		# add decoder layers
+		for c in reversed(config):
+			self.decoder_layers.append(
+				nn.Linear(
+					c["out"],
+					c["in"],
+				)
+			)
 
-        # add latent layers
-        self.encoder_to_latent_mean = nn.Linear(config[-1]["out"], latent_size)
-        self.encoder_to_latent_logvar = nn.Linear(config[-1]["out"], latent_size)
+		# add latent layers
+		self.encoder_to_latent_mean = nn.Linear(config[-1]["out"], latent_size)
+		self.encoder_to_latent_logvar = nn.Linear(config[-1]["out"], latent_size)
 
-        self.decoder_from_latent = nn.Linear(latent_size, config[-1]["out"])
+		self.decoder_from_latent = nn.Linear(latent_size, config[-1]["out"])
 
-        self.decoder_to_output = nn.Linear(config[0]["in"], input_size)
+		self.decoder_to_output = nn.Linear(config[0]["in"], input_size)
 
-    def forward(self, x):
+	def forward(self, x):
 
-        x = self.act_func(self.input_to_encoder(x))
+		x = self.act_func(self.input_to_encoder(x))
 
-        for l in self.encoder_layers:
-            x = self.act_func(l(x))
+		for l in self.encoder_layers:
+			x = self.act_func(l(x))
 
-        mu = self.encoder_to_latent_mean(x)
-        logvar = self.encoder_to_latent_logvar(x)
+		mu = self.encoder_to_latent_mean(x)
+		logvar = self.encoder_to_latent_logvar(x)
 
-        std = torch.exp(0.5 * logvar)
-        epsilon = torch.randn_like(std)
-        z = mu + std * epsilon  # latent of VAE
+		std = torch.exp(0.5 * logvar)
+		epsilon = torch.randn_like(std)
+		z = mu + std * epsilon  # latent of VAE
 
-        z = self.act_func(self.decoder_from_latent(z))
+		z = self.act_func(self.decoder_from_latent(z))
 
-        for l in self.decoder_layers:
-            z = self.act_func(l(z))
+		for l in self.decoder_layers:
+			z = self.act_func(l(z))
 
-        x_hat = self.decoder_to_output(z)
+		x_hat = self.decoder_to_output(z)
 
-        return x_hat, mu, logvar
+		return x_hat, mu, logvar
 
 
 # class CNNAutoencoder(nn.Module):

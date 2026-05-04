@@ -25,3 +25,6 @@ explicit = true
 torch = [{ index = "pytorch-cu126" }]
 torchvision = [{ index = "pytorch-cu126" }]
 torchaudio = [{ index = "pytorch-cu126" }]
+
+[tool.ruff.format]
+indent-style = "tab"
