@@ -130,8 +130,9 @@ class Trainer:
 					x = (x - train_mean) / train_std  # normalize data
 					x = x * x_mask  # re-set 'gaps'/masked regions as zero
 
-				print("After standardising: min={standardized.min():.3f}, max={standardized.max():.3f}")
-				print(f"                       std={standardized.std():.3f}")
+				stded = (all_vals - train_mean)/ train_std
+				print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
+				print(f"                       std={stded.std():.3f}")
 
 				x = x.to(self.device)
 				x_mask = x_mask.to(self.device)
