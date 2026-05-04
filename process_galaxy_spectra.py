@@ -79,3 +79,7 @@ def main():
     # check_h5_samples(h5_filename, norm = False)
     funcs.check_h5_samples(h5_filename, norm = True)
 
+
+if __name__ == '__main__':
+    
+    main()
