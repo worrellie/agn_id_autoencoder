@@ -568,7 +568,7 @@ def process_single_spec(triplet, common_vals, grid_size, output_dir, resampler):
         # check masking
         mask = (final_spec_flux == 0)
         if mask.all():
-            print(f'Fully masked spectrum: {base_name}')
+            print(f'Fully masked spec: {base_name}')
 
     	# Save
     	save_spec(final_spec_flux, final_spec_l, redshift, snr, norm_factor, base_name, output_dir)
