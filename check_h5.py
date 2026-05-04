@@ -61,7 +61,7 @@ def check_h5(file):
 # print("Unique values:", np.unique(s))
 # print("Mean:", s.mean())
 
-with h5py.File("test_all_spectra_sf_q.h5", "r") as hf:
+with h5py.File("all_spectra.h5", "r") as hf:
     print(f"norm_mean: {hf.attrs['norm_mean']}")
     print(f"norm_std:  {hf.attrs['norm_std']}")
     print(f"raw_mean:  {hf.attrs['raw_mean']}")
