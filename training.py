@@ -113,9 +113,24 @@ class Trainer:
 			logger.info(f"epoch {epoch} first x_hat mean: check below")
 
 			for x, x_mask in train_loader:
+
+				# for understanding exploding gradient problem
+				# check min and max incoming x values
+				all_vals.append(x[x_mask])
+				if len(all_vals) > 20:
+					break
+				all_vals = torch.cat(all_vals)
+				print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
+				print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
+				print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
+
+
 				if normalize:
 					x = (x - train_mean) / train_std  # normalize data
 					x = x * x_mask  # re-set 'gaps'/masked regions as zero
+
+				print("After standardising: min={standardized.min():.3f}, max={standardized.max():.3f}")
+				print(f"                       std={standardized.std():.3f}")
 
 				x = x.to(self.device)
 				x_mask = x_mask.to(self.device)
