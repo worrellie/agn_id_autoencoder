@@ -565,12 +565,11 @@ def process_single_spec(triplet, common_vals, grid_size, output_dir, resampler):
     	spec_flux, spec_l = merge_channels(channel_pairs, grid_size=grid_size)
     	final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
 
-        # check masking
-        mask = (final_spec_flux == 0)
-        if mask.all():
-            print(f'Fully masked spec: {base_name}')
+		mask = (final_spec_flux == 0)
+		if mask.all():
+			print(f'fully masked spec: {base_name}')
 
-    	# Save
+        # Save
     	save_spec(final_spec_flux, final_spec_l, redshift, snr, norm_factor, base_name, output_dir)
     	return base_name # Useful for tracking progress
 
