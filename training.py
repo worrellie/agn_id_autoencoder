@@ -75,10 +75,34 @@ class Trainer:
 		train_mean = train_loader.dataset.mean
 		train_std = train_loader.dataset.std
 		normalize = False
+
+		log_scale = False
+		clip = False
+
 		if train_mean is not None and train_std is not None:
 			normalize = True
+	
+		if (normalize and clip):
+			print(f"Applying clipping to input data (clipped beyond -5) and then standardizing")
+		elif (clip and not normalize):
+			normalize = False
+			print(f"Applying clipping to input data (clipped beyond -5), not standardizing")
+		elif normalize and not clip:
+			print(f"Standardizing and not clipping input data")
 		else:
-			logger.info("not normalizing input data")
+			print(f"Not normalizng or clipping data in any way")
+
+		# log_scale = True
+		# if train_mean is not None and train_std is not None:
+		# 	normalize = True
+	
+		# if (normalize and log_scale) or (log_scale and not normalize):
+		# 	normalize = False
+		# 	print(f"Applying log scaling to input data (asinh)")
+		# elif normalize and not log_scale:
+		# 	print(f"Standardizing input data")
+		# else:
+		# 	print(f"Not normalizing data in any way")
 
 		# # TESTING
 		# normalize=False
@@ -92,6 +116,10 @@ class Trainer:
 		valid_losses = []
 		valid_mses = []
 		valid_kls = []
+
+		print(f'norm: {normalize}')
+		print(f'log scale: {log_scale}')
+		print(f'clip: {clip}')
 
 		logger.info("training model...")
 
@@ -114,25 +142,37 @@ class Trainer:
 
 			for x, x_mask in train_loader:
 
-				# for understanding exploding gradient problem
-				# check min and max incoming x values
-				all_vals = []
-				all_vals.append(x[x_mask])
-				if len(all_vals) > 20:
-					break
-				all_vals = torch.cat(all_vals)
-				print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
-				print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
-				print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
+				# # for understanding exploding gradient problem
+				# # check min and max incoming x values
+				# all_vals = []
+				# all_vals.append(x[x_mask])
+				# if len(all_vals) > 20:
+				# 	break
+				# all_vals = torch.cat(all_vals)
+				# print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
+				# print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
+				# print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
+
+				# stded = (all_vals - train_mean)/ train_std
+				# print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
+				# print(f"                       std={stded.std():.3f}")
+				
 
 
-				if normalize:
+				if log_scale:
+					x = torch.asinh(x)
+					x = x * x_mask
+				elif normalize and not clip:
 					x = (x - train_mean) / train_std  # normalize data
 					x = x * x_mask  # re-set 'gaps'/masked regions as zero
+				elif normalize and clip:
+					x = torch.clamp(x, min = -5.0)
+					x = (x - train_mean) / train_std  # normalize data
+					x = x * x_mask  # re-set 'gaps'/masked regions as zero
+				elif clip and not normalize:
+					x = torch.clamp(x, min = -5.0)
+					x = x * x_mask
 
-				stded = (all_vals - train_mean)/ train_std
-				print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
-				print(f"                       std={stded.std():.3f}")
 
 				x = x.to(self.device)
 				x_mask = x_mask.to(self.device)

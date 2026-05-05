@@ -60,7 +60,7 @@ def main():
 		"-s", "--early_stop", action="store_true"
 	)  # if -s is parsed, True is returned
 	parser.add_argument("-b", "--beta", default=0.0, type=float)
-	parser.add_argument("--learn_rate", default=1e-4, type=float)
+	parser.add_argument("--learn_rate", default=1e-5, type=float)
 	parser.add_argument("-d", "--weight_decay", default=1e-8, type=float)
 	parser.add_argument("-l", "--latent", default=32, type=int)
 
