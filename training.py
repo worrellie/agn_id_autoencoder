@@ -83,16 +83,21 @@ class Trainer:
 
 		if train_mean is not None and train_std is not None:
 			normalize = True
-	
-		if (normalize and clip):
-			print(f"Applying clipping to input data (clipped beyond -5) and then standardizing")
-		elif (clip and not normalize):
-			normalize = False
-			print(f"Applying clipping to input data (clipped beyond -5), not standardizing")
-		elif normalize and not clip:
-			print(f"Standardizing and not clipping input data")
-		else:
-			print(f"Not normalizng or clipping data in any way")
+
+		# FOR TESTING
+		normalize = False
+		log_scale = True
+		clip = True
+		#############
+
+		if clip:
+			print(f"Applying clipping to input data (clipped beyond -5)")
+		if log_scale:
+			print(f"Applying log transformation to input data")
+		if normalize:
+			print(f"Applying Z-score normalization to input data")
+		if not normalize and not clip and not log_scale:
+			print(f"No clipping or normalization applied")
 
 		# log_scale = True
 		# if train_mean is not None and train_std is not None:
@@ -158,10 +163,18 @@ class Trainer:
 				print(f"                       std={stded.std():.3f}")
 				
 
-
-				if log_scale:
-					x = torch.asinh(x) # NO
+				if clip:
+					x = torch.clamp(x, min = -5.0)
 					x = x * x_mask
+				if log_scale:
+					offset = 5 + 1e-8
+					x = torch.asinh(x + offset)
+					x = x * x_mask
+				if normalize:
+					x = (x - train_mean) / train_std  # normalize data
+					x = x * x_mask  # re-set 'gaps'/masked regions as zero
+
+
 				elif normalize and not clip:
 					x = (x - train_mean) / train_std  # normalize data
 					x = x * x_mask  # re-set 'gaps'/masked regions as zero

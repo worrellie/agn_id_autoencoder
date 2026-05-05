@@ -259,6 +259,7 @@ def calc_SNR(flux, l):
 
 	noise = np.std(target_flux)
 	mean_flux = np.mean(target_flux)
+	median_flux = np.median(target_flux)
 
 	if noise == 0:
 		print("could not get snr, zrero noise")
