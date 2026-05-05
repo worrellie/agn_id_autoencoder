@@ -23,7 +23,7 @@ logger = logging.getLogger(__name__)
 
 class Trainer:
 	def __init__(
-		self, device, test_name, model, optimizer, early_stopping, beta, test=False
+		self, device, test_name, model, optimizer, early_stopping, beta, use_autocast=False, test=False
 	):
 
 		self.device = device
@@ -36,17 +36,18 @@ class Trainer:
 		if self.beta == 0 and self.model.type == "vae":
 			warnings.warn("Your beta value for a VAE is 0")
 
+		self.use_autocast = False
+
 		self.test = test
 
 		try:
 			import intel_extension_for_pytorch as ipex
-
 			self.use_ipex = True
 		except ImportError:
 			self.use_ipex = False
 
 		"""
-		dtype float16 is only for GPU. CPU requires bfloat16
+		note: dtype float16 is only for GPU. CPU requires bfloat16
 		"""
 		if self.device.type == "cpu":
 			self.autocast_type = torch.bfloat16
@@ -74,6 +75,7 @@ class Trainer:
 
 		train_mean = train_loader.dataset.mean
 		train_std = train_loader.dataset.std
+
 		normalize = False
 
 		log_scale = False
@@ -135,32 +137,30 @@ class Trainer:
 			processed_samples = 0
 
 			first_param = next(self.model.parameters())
-			logger.info(
-				f"epoch {epoch} first param mean: {first_param.data.mean():.6f}"
-			)
+			logger.info(f"epoch {epoch} first param mean: {first_param.data.mean():.6f}")
 			logger.info(f"epoch {epoch} first x_hat mean: check below")
 
 			for x, x_mask in train_loader:
 
-				# # for understanding exploding gradient problem
-				# # check min and max incoming x values
-				# all_vals = []
-				# all_vals.append(x[x_mask])
-				# if len(all_vals) > 20:
-				# 	break
-				# all_vals = torch.cat(all_vals)
-				# print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
-				# print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
-				# print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
+				# for understanding exploding gradient problem
+				# check min and max incoming x values
+				all_vals = []
+				all_vals.append(x[x_mask])
+				if len(all_vals) > 20:
+					break
+				all_vals = torch.cat(all_vals)
+				print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
+				print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
+				print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
 
-				# stded = (all_vals - train_mean)/ train_std
-				# print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
-				# print(f"                       std={stded.std():.3f}")
+				stded = (all_vals - train_mean)/ train_std
+				print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
+				print(f"                       std={stded.std():.3f}")
 				
 
 
 				if log_scale:
-					x = torch.asinh(x)
+					x = torch.asinh(x) # NO
 					x = x * x_mask
 				elif normalize and not clip:
 					x = (x - train_mean) / train_std  # normalize data
@@ -188,44 +188,37 @@ class Trainer:
 
 				self.optimizer.zero_grad()
 
-				with self.get_autocast_context():
-					# with torch.autocast(device_type = self.device.type, dtype=self.autocast_type):
+				if self.use_autocast:
 
-					x_hat, mu, logvar = self.model(
-						x
-					)  # batch prediction. note: only VAE will output non-None mu/var
-					logger.info(
-						f"train x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}"
-					)
+					with self.get_autocast_context():
+
+						x_hat, mu, logvar = self.model(x)  # batch prediction. note: only VAE will output non-None mu/var
+						logger.info(f"train x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}")
+
+						# stats for *batch*
+						mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
+
+					if self.grad_scaler is not None:
+						self.grad_scaler.scale(loss).backward()  # call backward on scaled loss to create scaled
+						# scaled gradients
+						self.grad_scaler.step(self.optimizer)  # scaler.step unscales gradients. then if theyre not
+						# inf or nan, step is called. otherwise step is skipped
+						self.grad_scaler.update()  # update scales for next iteration
+					else:
+						loss.backward()
+						self.optimizer.step()
+
+				else:
+
+					x_hat, mu, logvar = self.model(x)  # batch prediction. note: only VAE will output non-None mu/var
+					logger.info(f"train x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}")
 
 					# stats for *batch*
-					mse, kl, loss = funcs._loss_calc_batch(
-						x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta
-					)  # 'mean' gives loss per sample for batch
+					mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
 
-				if self.grad_scaler is not None:
-					self.grad_scaler.scale(
-						loss
-					).backward()  # call backward on scaled loss to create scaled
-					# scaled gradients
-					self.grad_scaler.step(
-						self.optimizer
-					)  # scaler.step unscales gradients. then if theyre not
-					# inf or nan, step is called. otherwise step is skipped
-					self.grad_scaler.update()  # update scales for next iteration
-				else:
 					loss.backward()
-					self.optimizer.step()
 
-				# if self.device.type == "cpu":
-				# loss.backward()
-				# self.optimizer.step()
-				# else:
-				# self.grad_scaler.scale(loss).backward() # call backward on scaled loss to create scaled
-				# # scaled gradients
-				# self.grad_scaler.step(self.optimizer) # scaler.step unscales gradients. then if theyre not
-				# # inf or nan, step is called. otherwise step is skipped
-				# self.grad_scaler.update() # update scales for next iteration
+					self.optimizer.step()
 
 				# note: .item() in pytorch gives UNSCALED loss
 				train_mse += mse.item() * x.size(0)  # reconstruction loss per sample
