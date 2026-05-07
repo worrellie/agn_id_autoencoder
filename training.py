@@ -199,7 +199,8 @@ class Trainer:
 
 						# stats for *batch*
 						mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
-						print(np.mean(loss))
+						print(loss)
+						print(loss.data.mean())
 
 					if self.grad_scaler is not None:
 						self.grad_scaler.scale(loss).backward()  # call backward on scaled loss to create scaled
@@ -218,7 +219,8 @@ class Trainer:
 
 					# stats for *batch*
 					mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
-					print(np.mean(loss))
+					print(loss)
+					print(loss.data.mean())
 
 					loss.backward()
 
@@ -278,7 +280,8 @@ class Trainer:
 						)
 
 						mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
-						print(np.mean(loss))
+						print(loss)
+						print(loss.data.mean())
 
 						# print(x.size(0))
 
