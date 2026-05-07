@@ -36,7 +36,8 @@ class Trainer:
 		if self.beta == 0 and self.model.type == "vae":
 			warnings.warn("Your beta value for a VAE is 0")
 
-		self.use_autocast = False
+		self.use_autocast = use_autocast
+		print(f'Using autocast: {use_autocast}')
 
 		self.test = test
 
@@ -84,11 +85,11 @@ class Trainer:
 		if train_mean is not None and train_std is not None:
 			normalize = True
 
-		# FOR TESTING
-		normalize = False
-		log_scale = False
-		clip = False
-		#############
+		# # FOR TESTING
+		# normalize = False
+		# log_scale = False
+		# clip = False
+		# #############
 
 		if clip:
 			print(f"Applying clipping to input data (clipped beyond -5)")
@@ -99,21 +100,6 @@ class Trainer:
 		if not normalize and not clip and not log_scale:
 			print(f"No clipping or normalization applied")
 
-		# log_scale = True
-		# if train_mean is not None and train_std is not None:
-		# 	normalize = True
-	
-		# if (normalize and log_scale) or (log_scale and not normalize):
-		# 	normalize = False
-		# 	print(f"Applying log scaling to input data (asinh)")
-		# elif normalize and not log_scale:
-		# 	print(f"Standardizing input data")
-		# else:
-		# 	print(f"Not normalizing data in any way")
-
-		# # TESTING
-		# normalize=False
-		# logger.info("DATA NOT NORMALISED FOR TEST PURPOSES")
 
 		self.model.to(self.device)
 
@@ -142,25 +128,26 @@ class Trainer:
 			processed_samples = 0
 
 			first_param = next(self.model.parameters())
+			print(first_param.shape)
 			logger.info(f"epoch {epoch} first param mean: {first_param.data.mean():.6f}")
 			logger.info(f"epoch {epoch} first x_hat mean: check below")
 
 			for x, x_mask in train_loader:
 
-				# for understanding exploding gradient problem
-				# check min and max incoming x values
-				all_vals = []
-				all_vals.append(x[x_mask])
-				if len(all_vals) > 20:
-					break
-				all_vals = torch.cat(all_vals)
-				print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
-				print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
-				print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
+				# # for understanding exploding gradient problem
+				# # check min and max incoming x values
+				# all_vals = []
+				# all_vals.append(x[x_mask])
+				# if len(all_vals) > 20:
+				# 	break
+				# all_vals = torch.cat(all_vals)
+				# print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
+				# print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
+				# print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
 
-				stded = (all_vals - train_mean)/ train_std
-				print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
-				print(f"                       std={stded.std():.3f}")
+				# stded = (all_vals - train_mean)/ train_std
+				# print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
+				# print(f"                       std={stded.std():.3f}")
 				
 
 				if clip:
@@ -203,6 +190,8 @@ class Trainer:
 
 				if self.use_autocast:
 
+					print('autocasr in action')
+
 					with self.get_autocast_context():
 
 						x_hat, mu, logvar = self.model(x)  # batch prediction. note: only VAE will output non-None mu/var
@@ -210,6 +199,7 @@ class Trainer:
 
 						# stats for *batch*
 						mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
+						print(np.mean(loss))
 
 					if self.grad_scaler is not None:
 						self.grad_scaler.scale(loss).backward()  # call backward on scaled loss to create scaled
@@ -228,6 +218,7 @@ class Trainer:
 
 					# stats for *batch*
 					mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
+					print(np.mean(loss))
 
 					loss.backward()
 
@@ -286,9 +277,8 @@ class Trainer:
 							f"valid x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}"
 						)
 
-						mse, kl, loss = funcs._loss_calc_batch(
-							x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta
-						)  # 'mean' gives loss per sample for batch
+						mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
+						print(np.mean(loss))
 
 						# print(x.size(0))
 
