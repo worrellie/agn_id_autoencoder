@@ -86,8 +86,8 @@ class Trainer:
 
 		# FOR TESTING
 		normalize = False
-		log_scale = True
-		clip = True
+		log_scale = False
+		clip = False
 		#############
 
 		if clip:
