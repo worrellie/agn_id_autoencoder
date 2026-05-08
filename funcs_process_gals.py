@@ -261,7 +261,7 @@ def calc_SNR(flux, l):
 
 	noise = np.std(target_flux)
 	mean_flux = np.mean(target_flux)
-	median_flux = np.median(target_flux)
+	# median_flux = np.median(target_flux)
 
 	if noise == 0:
 		print("could not get snr, zrero noise")
@@ -281,8 +281,8 @@ def save_spec( flux, l, original_z, snr, norm_factors, infile_base, outdir, nois
 	hdr["OG_Z"] = original_z
 	hdr["SNR"] = snr
 	hdr["ORIGINAL"] = infile_base
-	hdr["NORMFAC_CONT"] = norm_factors['continuum_mean']
-	hdr['NORMFAC_MED'] = norm_factors['full_spec_median']
+	hdr["NORM_CON"] = norm_factors['continuum_mean']
+	hdr['NORM_MED'] = norm_factors['full_spec_median']
 
 	hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
 
@@ -408,21 +408,25 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
 				try:
 					with fits.open(f) as hdul:
 						raw_flux = hdul[1].data["flux"].astype(np.float64)
+						unmasked = (raw_flx != 0)
 
-						norm_factor_continuum = hdul[1].header.get("NORMFAC_CONT")
-						norm_factor_median = hdul[1].header.get("NORMFAC_MED")
+						norm_factor_continuum = hdul[1].header.get("NORM_CON")
+						norm_factor_median = hdul[1].header.get("NORM_MED")
 
 						if (norm_factor_continuum is None or norm_factor_continuum == 0 or np.isnan(norm_factor_continuum) ):
-							warnings.warn( f"Invalid NORMFAC_CONT ({norm_factor_continuum}) in {os.path.basename(f)}. Defaulting to 1.0.")
+							warnings.warn( f"Invalid NORM_CON ({norm_factor_continuum}) in {os.path.basename(f)}. Defaulting to 1.0.")
 							norm_factor_continuum = 1.0
 
 						if (norm_factor_median is None or norm_factor_median == 0 or np.isnan(norm_factor_median) ):
-							warnings.warn( f"Invalid NORMFAC_CONT ({norm_factor_median}) in {os.path.basename(f)}. Defaulting to 1.0.")
+							warnings.warn( f"Invalid NORM_MED ({norm_factor_median}) in {os.path.basename(f)}. Defaulting to 1.0.")
 							norm_factor_median = 1.0
 
 						norm_flux_cont = raw_flux / norm_factor_continuum
 						norm_flux_med = raw_flux / norm_factor_median
-						log_scale_flux = np.sign(raw_flux) * np.log10(np.abs(raw_flux)+1)
+						##
+						log_scale_flux = np.sign(norm_flux_cont) * np.log1p(np.abs(norm_flux_cont)) # (log1p(x) is ln(1+x))
+						# log_scale_flux = np.sign(norm_flux_med) * np.log10(np.abs(norm_flux_med)+1)
+						log_scale_flux = log_scale_flux * unmasked
 
 						# get mean and std of training set for run time normalization
 						if split_name == "train":
