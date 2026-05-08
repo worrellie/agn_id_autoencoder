@@ -26,6 +26,8 @@ import os
 import random
 from astropy.table import Table
 
+import warnings
+
 # np.set_printoptions(threshold=np.inf)
 
 
@@ -240,7 +242,7 @@ def plot_spec(flux, l, z, original=None, templ=None):
 		stop_idx = min(e, len(l) - 1)
 		ax.axvspan(l[s], l[stop_idx], color="grey", alpha=0.8, label="Masked")
 
-	plt.title(f"z_obsv = {redshift}")
+	plt.title(f"z_obsv = {z}")
 	plt.show()
 
 
@@ -270,9 +272,7 @@ def calc_SNR(flux, l):
 	return mean_flux, noise, snr
 
 
-def save_spec(
-	flux, l, original_z, snr, norm_factor, infile_base, outdir, noise_type="noisy"
-):
+def save_spec( flux, l, original_z, snr, norm_factors, infile_base, outdir, noise_type="noisy"):
 
 	col1 = fits.Column(name="lambda", format="D", array=l)
 	col2 = fits.Column(name="flux", format="D", array=flux)
@@ -281,16 +281,14 @@ def save_spec(
 	hdr["OG_Z"] = original_z
 	hdr["SNR"] = snr
 	hdr["ORIGINAL"] = infile_base
-	# NORMFAC is not applied here, only when saving to h5 file
-	hdr["NORMFAC"] = norm_factor
+	hdr["NORMFAC_CONT"] = norm_factors['continuum_mean']
+	hdr['NORMFAC_MED'] = norm_factors['full_spec_median']
 
 	hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
 
 	out_name = f"{infile_base}_{noise_type}_deZ_rebinned.fits"
 
 	hdu.writeto(os.path.join(outdir, out_name), overwrite=True)
-
-	# print(f"saved {out_name}")
 
 	return
 
@@ -343,24 +341,37 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
 
 	# 4. Create the H5 File
 	with h5py.File(h5_filename, "w") as hf:
+
 		# Save common wavelength grid as a root attribute
 		hf.attrs["wavelengths"] = wavelength_grid
-		# print(wavelength_grid)
 
+		# for each of train, validation, and test, make datasets for raw,
+		# log scale flux, continuum normalized and full spec median normalized
+		# as well as snr, redshift and id for each spectrum
 		for split_name, split_list in file_splits.items():
 			n_samples = len(split_list)
 			print(f"📦 Writing {split_name} group ({n_samples} samples)...")
 
 			group = hf.create_group(split_name)
 
-			# # Datasets using float64 (f8) for high precision as requested
-			# # We now create TWO flux datasets: raw and normalized
-			# if norm:
-			# d_flux_norm = group.create_dataset('normalized_flux', (n_samples, n_pixels),
-			# dtype='f8', compression='gzip', chunks=True)
-			# d_norm_fac = group.create_dataset('norm_factor', (n_samples,), dtype='f8')
-			d_flux_norm = group.create_dataset(
-				"normalized_flux",
+			d_flux_log = group.create_dataset(
+				"log_scale_flux",
+				(n_samples, n_pixels),
+				dtype="f8",
+				compression="gzip",
+				chunks=(1, n_pixels),
+			)
+
+			d_flux_norm_cont = group.create_dataset(
+				"normalized_flux_cont",
+				(n_samples, n_pixels),
+				dtype="f8",
+				compression="gzip",
+				chunks=(1, n_pixels),
+			)
+
+			d_flux_norm_med = group.create_dataset(
+				"normalized_flux_med",
 				(n_samples, n_pixels),
 				dtype="f8",
 				compression="gzip",
@@ -374,77 +385,90 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
 				compression="gzip",
 				chunks=(1, n_pixels),
 			)
+
 			d_z = group.create_dataset("redshift", (n_samples,), dtype="f8")
 			d_snr = group.create_dataset("SNR", (n_samples,), dtype="f8")
 			d_ids = group.create_dataset("obj_id", (n_samples,), dtype="S100")
 
-			# Welford's algorithm/ running sums
+			# Welford's algorithm/ running sums for calculation of global means
+			# (only done for training datset to avoid data leakage)
 			# this is important for data efficiency if have a bazillion files
 			total_pixels = 0
 			sum_raw = 0.0
 			sum_sq_raw = 0.0
-			sum_norm = 0.0
-			sum_sq_norm = 0.0
+			sum_norm_cont = 0.0
+			sum_sq_norm_cont = 0.0
+			sum_norm_med = 0.0
+			sum_sq_norm_med = 0.0
+			sum_norm_log = 0.0
+			sum_sq_norm_log = 0.0
 
 			# 5. Fill datasets incrementally
 			for i, f in enumerate(split_list):
 				try:
 					with fits.open(f) as hdul:
-						# Since your processing code saved the normalized flux as the main 'flux' column:
-						# If you didn't save raw separately in the FITS, we can back-calculate
-						# or just store the normalized one if that's all that's in the FITS.
-						# I'll assume you saved the normalized version to the FITS.
+						raw_flux = hdul[1].data["flux"].astype(np.float64)
 
-						# print(hdul[1].header)
-						current_flux = hdul[1].data["flux"].astype(np.float64)
-						norm_factor = hdul[1].header.get("NORMFAC")
-						if (
-							norm_factor is None
-							or norm_factor == 0
-							or np.isnan(norm_factor)
-						):
-							warnings.warn(
-								f"Invalid NORMFAC ({norm_factor}) in {os.path.basename(f)}. Defaulting to 1.0."
-							)
-							norm_factor = 1.0
-						norm_flux = current_flux / norm_factor
+						norm_factor_continuum = hdul[1].header.get("NORMFAC_CONT")
+						norm_factor_median = hdul[1].header.get("NORMFAC_MED")
+
+						if (norm_factor_continuum is None or norm_factor_continuum == 0 or np.isnan(norm_factor_continuum) ):
+							warnings.warn( f"Invalid NORMFAC_CONT ({norm_factor_continuum}) in {os.path.basename(f)}. Defaulting to 1.0.")
+							norm_factor_continuum = 1.0
+
+						if (norm_factor_median is None or norm_factor_median == 0 or np.isnan(norm_factor_median) ):
+							warnings.warn( f"Invalid NORMFAC_CONT ({norm_factor_median}) in {os.path.basename(f)}. Defaulting to 1.0.")
+							norm_factor_median = 1.0
+
+						norm_flux_cont = raw_flux / norm_factor_continuum
+						norm_flux_med = raw_flux / norm_factor_median
+						log_scale_flux = np.sign(raw_flux) * np.log10(np.abs(raw_flux)+1)
+
+						# get mean and std of training set for run time normalization
 						if split_name == "train":
 							mask = (
-								(current_flux != 0)
-								& (~np.isnan(current_flux))
-								& (~np.isnan(norm_flux))
+								(raw_flux != 0)
+								& (~np.isnan(raw_flux))
+								& (~np.isnan(norm_flux_cont))
+								& (~np.isnan(norm_flux_med))
+								& (~np.isnan(log_scale_flux))
 							)
-							valid_raw = current_flux[mask]
-							valid_norm = norm_flux[mask]
-							# for std/mean calcs
+							valid_raw = raw_flux[mask]
+							valid_norm_cont = norm_flux_cont[mask]
+							valid_norm_med = norm_flux_med[mask]
+							valid_log = log_scale_flux[mask]
+
+							# for Welford's algorithm
 							total_pixels += valid_raw.size
+
 							sum_raw += np.sum(valid_raw)
 							sum_sq_raw += np.sum(valid_raw**2)
-							sum_norm += np.sum(valid_norm)
-							sum_sq_norm += np.sum(valid_norm**2)
-						#
+
+							sum_norm_cont += np.sum(valid_norm_cont)
+							sum_sq_norm_cont += np.sum(valid_norm_cont**2)
+
+							sum_norm_med += np.sum(valid_norm_med)
+							sum_sq_norm_med += np.sum(valid_norm_med**2)
+
+							sum_norm_log += np.sum(valid_log)
+							sum_sq_norm_log += np.sum(valid_log**2)
+						
 						redshift = hdul[1].header.get("OG_Z")
 						snr = hdul[1].header.get("SNR")
-
-						# print(norm_factor)
-						# if norm:
-						# norm_factor = hdul[0].header.get('NORMFAC', 1.0)
-						# d_flux_norm[i] = current_flux
-						# d_norm_fac[i] = norm_factor
 
 						d_z[i] = redshift
 						d_snr[i] = snr
 						d_ids[i] = os.path.basename(f).encode("utf-8")
 
-						d_flux_raw[i] = current_flux
-						d_flux_norm[i] = current_flux / norm_factor
+						d_flux_raw[i] = raw_flux
+						d_flux_norm_cont[i] = norm_flux_cont
+						d_flux_norm_med[i] = norm_flux_med
+						d_flux_log[i] = log_scale_flux
 
 				except Exception as e:
 					print(f"Skipping {f} due to error: {e}")
 
-				# if (i + 1) % 100 == 0:
-				# print(f"  {split_name} progress: {i+1}/{n_samples}")
-
+			# final calculations for mean and std of training dataset
 			if split_name == "train":
 				final_mean_raw = sum_raw / total_pixels
 				# Variance = (Sum_of_Squares / n) - (Mean^2)
@@ -453,26 +477,52 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
 					max(0, final_variance_raw)
 				)  # max(0,...) prevents tiny negative numbers due to precision
 
-				final_mean_norm = sum_norm / total_pixels
+				final_mean_norm_cont = sum_norm_cont / total_pixels
 				# Variance = (Sum_of_Squares / n) - (Mean^2)
-				final_variance_norm = (sum_sq_norm / total_pixels) - (
-					final_mean_norm**2
-				)
-				final_std_norm = np.sqrt(
-					max(0, final_variance_norm)
+				final_variance_norm_cont = (sum_sq_norm_cont / total_pixels) - (final_mean_norm_cont**2 )
+				final_std_norm_cont = np.sqrt(
+					max(0, final_variance_norm_cont)
+				)  # max(0,...) prevents tiny negative numbers due to precision
+
+				final_mean_norm_med = sum_norm_med / total_pixels
+				# Variance = (Sum_of_Squares / n) - (Mean^2)
+				final_variance_norm_med = (sum_sq_norm_med / total_pixels) - (final_mean_norm_med**2)
+				final_std_norm_med = np.sqrt(
+					max(0, final_variance_norm_med)
+				)  # max(0,...) prevents tiny negative numbers due to precision
+
+				final_mean_norm_log = sum_norm_log / total_pixels
+				# Variance = (Sum_of_Squares / n) - (Mean^2)
+				final_variance_norm_log = (sum_sq_norm_log / total_pixels) - (final_mean_norm_log**2)
+				final_std_norm_log = np.sqrt(
+					max(0, final_variance_norm_log)
 				)  # max(0,...) prevents tiny negative numbers due to precision
 
 				train_stats["raw_mean"] = final_mean_raw
 				train_stats["raw_std"] = final_std_raw
-				train_stats["norm_mean"] = final_mean_norm
-				train_stats["norm_std"] = final_std_norm
+
+				train_stats["norm_mean_cont"] = final_mean_norm_cont
+				train_stats["norm_std_cont"] = final_std_norm_cont
+
+				train_stats["norm_mean_med"] = final_mean_norm_med
+				train_stats["norm_std_med"] = final_std_norm_med
+
+				train_stats["norm_mean_log"] = final_mean_norm_log
+				train_stats["norm_std_log"] = final_std_norm_log
 
 		if "raw_mean" in train_stats:
 			hf.attrs["raw_mean"] = train_stats["raw_mean"]
 			hf.attrs["raw_std"] = train_stats["raw_std"]
 
-			hf.attrs["norm_mean"] = train_stats["norm_mean"]
-			hf.attrs["norm_std"] = train_stats["norm_std"]
+			hf.attrs["norm_mean_cont"] = train_stats["norm_mean_cont"]
+			hf.attrs["norm_std_cont"] = train_stats["norm_std_cont"]
+
+			hf.attrs["norm_mean_med"] = train_stats["norm_mean_med"]
+			hf.attrs["norm_std_med"] = train_stats["norm_std_med"]
+
+			hf.attrs["norm_mean_log"] = train_stats["norm_mean_log"]
+			hf.attrs["norm_std_log"] = train_stats["norm_std_log"]
+			
 
 	print(f"\n🏁 Successfully compiled {h5_filename}")
 
@@ -501,7 +551,9 @@ def check_h5_samples(h5_path, norm):
 
 			# Access the chosen flux dataset
 			dset_raw = hf[split]["raw_flux"]
-			dset_norm = hf[split]["normalized_flux"]
+			dset_norm_cont = hf[split]["normalized_flux_cont"]
+			dset_norm_med = hf[split]["normalized_flux_med"]
+			dset_log = hf[split]["log_scale_flux"]
 			n_samples = dset_raw.shape[0]
 
 			# 3. Pick a random index
@@ -509,7 +561,7 @@ def check_h5_samples(h5_path, norm):
 
 			# 4. Load the data
 			flux = dset_raw[rand_idx]
-			norm_flux = dset_norm[rand_idx]
+			norm_flux = dset_norm_cont[rand_idx]
 			z = hf[split]["redshift"][rand_idx]
 			obj_id = hf[split]["obj_id"][rand_idx].decode("utf-8")
 
@@ -560,34 +612,6 @@ def check_h5_structure(name, obj):
 		print(f"{indent}📊 Dataset: {name} | Shape: {obj.shape} | Type: {obj.dtype}")
 
 
-def compute_and_save_stats(h5_path, norm):
-	with h5py.File(h5_path, "a") as hf:  # 'a' for append/edit mode
-		# 1. Pull the training data
-		# Using a slice [:] loads it into RAM; if too big, use a loop
-		if norm:
-			flux_type = "normalized_flux"
-		else:
-			flux_type = "raw_flux"
-		train_flux = hf["train"][flux_type][:]
-
-		# 2. Create a mask to ignore gaps (0.0)
-		mask = train_flux != 0
-
-		# 3. Calculate Global Stats
-		# We only want the stats of the actual physical data
-		valid_data = train_flux[mask]
-		global_mean = np.mean(valid_data)
-		global_std = np.std(valid_data)
-
-		# 4. Save as root attributes
-		hf.attrs["train_mean"] = global_mean
-		hf.attrs["train_std"] = global_std
-
-		print(f"✅ Saved to {h5_path}:")
-		print(f"   Mean: {global_mean}")
-		print(f"   Std:  {global_std}")
-
-
 def save_zarr():
 
 	# not implemented
@@ -597,7 +621,9 @@ def save_zarr():
 	return None
 
 
-def process_single_spec(triplet, common_vals, grid_size, output_dir, resampler):
+def process_single_spec(triplet, common_vals, grid_size, output_dir, ):
+
+	resampler = FluxConservingResampler(extrapolation_treatment="truncate")
 
 	ri_p, yj_p, h_p, redshift = triplet
 	base_name = os.path.basename(ri_p).replace("_RI.fits", "")
@@ -625,27 +651,25 @@ def process_single_spec(triplet, common_vals, grid_size, output_dir, resampler):
 			)
 			channel_pairs.append([f_rebinned, l_rebinned])
 
-		# SNR and Merging
-		norm_factor, _, snr = calc_SNR(
-			np.asarray(original_flux_rest), np.asarray(original_l_rest)
-		)
+		# merge channels and get final spectrum
 		spec_flux, spec_l = merge_channels(channel_pairs, grid_size=grid_size)
 		final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
-
+		
+		# check for fully masked spectra
 		mask = final_spec_flux == 0
 		if mask.all():
 			print(f"fully masked spec: {base_name}")
 
-		# Save
-		save_spec(
-			final_spec_flux,
-			final_spec_l,
-			redshift,
-			snr,
-			norm_factor,
-			base_name,
-			output_dir,
-		)
+		# get normalization factors
+		cont_mean, _, snr = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
+		full_spec_median = np.median(final_spec_flux[~mask])
+		
+		norm_factors = {'continuum_mean' : cont_mean,
+						'full_spec_median' : full_spec_median}
+
+		# save spectrum in fits
+		save_spec(final_spec_flux, final_spec_l, redshift, snr, norm_factors, base_name, output_dir,)
+
 		return base_name  # Useful for tracking progress
 
 	except Exception as e:

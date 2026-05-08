@@ -37,11 +37,13 @@ def main():
 
 	common_vals, valid_triplets = funcs.get_common_grid(input_dir, de_z=0.8)
 
-	resampler = FluxConservingResampler(extrapolation_treatment="truncate")
+	# note: moved resampler to inside process_single_spec function because 
+	# it is not safe across workers 
+	# resampler = FluxConservingResampler(extrapolation_treatment="truncate")
 
 	if os.environ.get("SLURM_CPUS_PER_TASK") is not None:
 		print("running on cluster")
-		cpus = os.environ.get("SLURM_CPUS_PER_TASK")
+		cpus = int(os.environ.get("SLURM_CPUS_PER_TASK"))
 		print(f"Starting parallel processing on {cpus} cores...")
 	else:
 		print("running on non-cluster")
@@ -50,7 +52,7 @@ def main():
 
 	results = Parallel(n_jobs=cpus)(
 		delayed(funcs.process_single_spec)(
-			triplet, common_vals, grid_size, output_dir, resampler
+			triplet, common_vals, grid_size, output_dir, 
 		)
 		for triplet in valid_triplets
 	)
@@ -67,9 +69,6 @@ def main():
 
 	funcs.save_h5(h5_filename, files, train_files, valid_files, test_files)
 
-	# update h5 with train set stats
-	# compute_and_save_stats('test_all_spectra.h5', )
-
 	# check h5
 	with h5py.File(h5_filename, "r") as hf:
 		print(f"\n📑 Root Attributes:")
@@ -78,7 +77,7 @@ def main():
 
 		print("\n🌳 File Structure:")
 		hf.visititems(funcs.check_h5_structure)
-	print("/n---------------------------------------------/n")
+	print("\n---------------------------------------------\n")
 
 	# check_h5_samples(h5_filename, norm = False)
 	funcs.check_h5_samples(h5_filename, norm=True)
