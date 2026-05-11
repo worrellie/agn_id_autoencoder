@@ -170,7 +170,7 @@ def merge_channels(channel_pairs, grid_size):
 		# check overlap is not more than 1 or 2 pixels
 		if prev_end is not None:
 			overlap = start_idx - prev_end
-			if 140 <= abs(overlap) <= 165:
+			if 100 <= abs(overlap) <= 300:
 				# print('instrument gap')
 				pass
 			elif -2 <= overlap <= 2:
@@ -256,7 +256,7 @@ def calc_SNR(flux, l):
 	target_flux = flux[target_mask]
 	# print(len(target_flux))
 	if target_flux.size < 2:
-		print("could not get snr")
+		print("could not get snr: continuum region too small")
 		return 0.0, 0.0, 0.0
 
 	noise = np.std(target_flux)
@@ -264,7 +264,7 @@ def calc_SNR(flux, l):
 	# median_flux = np.median(target_flux)
 
 	if noise == 0:
-		print("could not get snr, zrero noise")
+		print("could not get snr, zero noise")
 		return mean_flux, 0.0, 0.0
 
 	snr = mean_flux / noise
@@ -665,8 +665,13 @@ def process_single_spec(triplet, common_vals, grid_size, output_dir, ):
 			print(f"fully masked spec: {base_name}")
 
 		# get normalization factors
-		cont_mean, _, snr = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
+		cont_mean, noise, snr = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
+		if (noise == 0.0 and snr == 0.0) or (cont_mean == 0.0 or np.isnan(cont_mean) or cont_mean is None):
+			print(f"invalid spec {base_name} with ({cont_mean}, {noise}, {snr})")
+
 		full_spec_median = np.median(final_spec_flux[~mask])
+		if  (full_spec_median == 0.0 or np.isnan(full_spec_median) or full_spec_median is None):
+			print(f"invalid spec {base_name} with {full_spec_median}")
 		
 		norm_factors = {'continuum_mean' : cont_mean,
 						'full_spec_median' : full_spec_median}
