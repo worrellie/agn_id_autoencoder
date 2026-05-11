@@ -408,7 +408,7 @@ def save_h5(h5_filename, files, train_files, valid_files, test_files):
 				try:
 					with fits.open(f) as hdul:
 						raw_flux = hdul[1].data["flux"].astype(np.float64)
-						unmasked = (raw_flx != 0)
+						unmasked = (raw_flux != 0)
 
 						norm_factor_continuum = hdul[1].header.get("NORM_CON")
 						norm_factor_median = hdul[1].header.get("NORM_MED")
