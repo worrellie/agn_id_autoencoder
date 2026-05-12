@@ -150,6 +150,8 @@ def main():
 				"beta": 0.0,
 				"model_type": "StandardAutoencoder",
 				"layers": "--layers-4",
+				"flux_type" : "log_scale_flux",
+				"normalize" : "normalize"
 			},
 			{
 				"epochs": 500,
@@ -159,6 +161,8 @@ def main():
 				"beta": 0.0,
 				"model_type": "StandardAutoencoder",
 				"layers": "--layers-4",
+				"flux_type" : "log_scale_flux",
+				"normalize" : "normalize"
 			},
 			{
 				"epochs": 1000,
@@ -168,9 +172,13 @@ def main():
 				"beta": 0.0,
 				"model_type": "StandardAutoencoder",
 				"layers": "--layers-4",
+				"flux_type" : "log_scale_flux",
+				"normalize" : "normalize"
 			}, 
 		]
 		c = test_configs[args.task_id]
+		args.flux_type = c["flux_type"]
+		args.normalize = c["normalize"]
 		args.epochs = c["epochs"]
 		args.latent = c["latent"]
 		args.learn_rate = c["learn_rate"]
@@ -208,9 +216,11 @@ def main():
 	LEARNING_RATE = args.learn_rate
 	WEIGHT_DECAY = args.weight_decay
 
+	normalize = args.normalize
+
 	#####################################################################################################
 
-	TEST_NAME = f"RUN_{args.model_type}_nl{len(CONFIG)}_ls{LATENT_SIZE}_e{EPOCHS}_{ACTIVATION_FUNCTION}_B{BETA:.0e}_lr{LEARNING_RATE:.0e}_wd{WEIGHT_DECAY}_es{EARLY_STOPPING}"
+	TEST_NAME = f"RUN_{args.model_type}_nl{len(CONFIG)}_ls{LATENT_SIZE}_e{EPOCHS}_{ACTIVATION_FUNCTION}_B{BETA:.0e}_lr{LEARNING_RATE:.0e}_wd{WEIGHT_DECAY}_es{EARLY_STOPPING}_n{normalize}"
 
 	counter = 1
 	base_name = TEST_NAME
@@ -349,7 +359,7 @@ def main():
 		device, TEST_NAME, model, optimizer, early_stopping, BETA, test=TESTING
 	)
 	model, model_losses = trainer.train_ae(
-		EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb, normalize=args.normalize
+		EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb, normalize=normalize,
 	)
 	stop = time.time()
 
