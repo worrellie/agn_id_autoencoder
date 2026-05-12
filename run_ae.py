@@ -54,7 +54,7 @@ def main():
 	)
 
 	parser.add_argument("-f", "--filename", default="all_spectra.h5")
-	parser.add_argument("-t", "--flux_type", default="normalized_flux_cont")
+	parser.add_argument("-ft", "--flux_type", default="normalized_flux_cont")
 
 	parser.add_argument( "-n", "--normalize", action="store_true" )  # if -s is parsed, True is returned
 
@@ -301,7 +301,7 @@ def main():
 	test_params = {
 		"test_name": TEST_NAME,
 		"data_file": DATA,
-		"flux_type": flux_type
+		"flux_type": flux_type,
 		"ae_type": args.model_type,
 		"config": CONFIG,
 		"latent_size": LATENT_SIZE,

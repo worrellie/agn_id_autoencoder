@@ -72,7 +72,7 @@ class Trainer:
 				device_type=self.device.type, dtype=self.autocast_type
 			)
 
-	def train_ae(self, epochs, train_loader, valid_loader=None, nomrmalize=False, verbose=False):
+	def train_ae(self, epochs, train_loader, valid_loader=None, normalize=False, verbose=False):
 
 		train_mean = train_loader.dataset.mean
 		train_std = train_loader.dataset.std
