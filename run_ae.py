@@ -54,11 +54,12 @@ def main():
 	)
 
 	parser.add_argument("-f", "--filename", default="all_spectra.h5")
+	parser.add_argument("-t", "--flux_type", default="normalized_flux_cont")
+
+	parser.add_argument( "-n", "--normalize", action="store_true" )  # if -s is parsed, True is returned
 
 	parser.add_argument("-e", "--epochs", default=10, type=int)
-	parser.add_argument(
-		"-s", "--early_stop", action="store_true"
-	)  # if -s is parsed, True is returned
+	parser.add_argument( "-s", "--early_stop", action="store_true" )  # if -s is parsed, True is returned
 	parser.add_argument("-b", "--beta", default=0.0, type=float)
 	parser.add_argument("--learn_rate", default=1e-5, type=float)
 	parser.add_argument("-d", "--weight_decay", default=1e-8, type=float)
@@ -70,10 +71,7 @@ def main():
 		dest="architecture",
 		action="store_const",
 		const=[
-			{
-				"in": 512,
-				"out": 256,
-			},
+			{"in": 512, "out": 256,},
 		],
 	)
 	hidden_layers.add_argument(
@@ -81,14 +79,8 @@ def main():
 		dest="architecture",
 		action="store_const",
 		const=[
-			{
-				"in": 512,
-				"out": 256,
-			},
-			{
-				"in": 256,
-				"out": 64,
-			},
+			{"in": 512, "out": 256,},
+			{"in": 256, "out": 64,},
 		],
 	)
 	hidden_layers.add_argument(
@@ -96,18 +88,9 @@ def main():
 		dest="architecture",
 		action="store_const",
 		const=[
-			{
-				"in": 512,
-				"out": 256,
-			},
-			{
-				"in": 256,
-				"out": 128,
-			},
-			{
-				"in": 128,
-				"out": 64,
-			},
+			{"in": 512, "out": 256,},
+			{"in": 256, "out": 128,},
+			{"in": 128, "out": 64,},
 		],
 	)
 	hidden_layers.add_argument(
@@ -185,42 +168,7 @@ def main():
 				"beta": 0.0,
 				"model_type": "StandardAutoencoder",
 				"layers": "--layers-4",
-			},
-			# {'epochs': 100, 'latent': 4, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
-			# {'epochs': 100, 'latent': 6, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
-			# {'epochs': 100, 'latent': 8, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
-			#
-			# {'epochs': 100, 'latent': 4, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
-			# {'epochs': 100, 'latent': 6, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
-			# {'epochs': 100, 'latent': 8, 'learn_rate': 1e-4, 'weight_decay':1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
-			#
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-2, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-6, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-8, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-4'},
-			#
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-1'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-2'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 0.0, 'model_type': 'StandardAutoencoder', 'layers': '--layers-3'},
-			# VAE
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			# {'epochs': 500, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			# {'epochs': 1000, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			#
-			# {'epochs': 100, 'latent': 10, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			# {'epochs': 100, 'latent': 64, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			#
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-2, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-6, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-8, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			#
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-1'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-2'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-3, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-3'},
-			#
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-1, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-4'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-6, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-'},
-			# {'epochs': 100, 'latent': 32, 'learn_rate': 1e-4, 'beta': 1e-9, 'model_type': 'VariationalAutoencoder', 'layers': '--layers-3'},
+			}, 
 		]
 		c = test_configs[args.task_id]
 		args.epochs = c["epochs"]
@@ -232,30 +180,18 @@ def main():
 		# map layers string to the architecture const
 		layer_map = {
 			"--layers-1": [{"in": 512, "out": 256}],
-			"--layers-2": [{"in": 512, "out": 256}, {"in": 256, "out": 64}],
-			"--layers-3": [
-				{"in": 512, "out": 256},
-				{"in": 256, "out": 128},
-				{"in": 128, "out": 64},
-			],
-			"--layers-4": [
-				{
-					"in": 700,
-					"out": 512,
-				},
-				{
-					"in": 512,
-					"out": 256,
-				},
-				{
-					"in": 256,
-					"out": 128,
-				},
-				{
-					"in": 128,
-					"out": 64,
-				},
-			],
+
+			"--layers-2": [{"in": 512, "out": 256}, 
+						   {"in": 256, "out": 64}],
+
+			"--layers-3": [{"in": 512, "out": 256},
+						   {"in": 256, "out": 128},
+						   {"in": 128, "out": 64},],
+
+			"--layers-4": [{"in": 700, "out": 512,},
+						   {"in": 512, "out": 256,},
+						   {"in": 256, "out": 128, },
+						   {"in": 128, "out": 64, },],
 		}
 		args.architecture = layer_map[c["layers"]]
 
@@ -333,9 +269,11 @@ def main():
 
 	DATA = args.filename
 
+	flux_type = args.flux_type
+
 	# default is normalised data
-	train = H5SpecDataset(DATA, split="train")
-	valid = H5SpecDataset(DATA, split="validation")
+	train = H5SpecDataset(DATA, split="train", flux_type=flux_type)
+	valid = H5SpecDataset(DATA, split="validation", flux_type=flux_type)
 
 	if device.type == "cpu":
 		if os.environ.get("SLURM_CPUS_PER_TASK") is not None:
@@ -363,6 +301,7 @@ def main():
 	test_params = {
 		"test_name": TEST_NAME,
 		"data_file": DATA,
+		"flux_type": flux_type
 		"ae_type": args.model_type,
 		"config": CONFIG,
 		"latent_size": LATENT_SIZE,
@@ -410,7 +349,7 @@ def main():
 		device, TEST_NAME, model, optimizer, early_stopping, BETA, test=TESTING
 	)
 	model, model_losses = trainer.train_ae(
-		EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb
+		EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb, normalize=args.normalize
 	)
 	stop = time.time()
 

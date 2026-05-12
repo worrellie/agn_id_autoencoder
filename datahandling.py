@@ -19,16 +19,28 @@ logger = logging.getLogger(__name__)
 
 
 class H5SpecDataset(torch.utils.data.Dataset):
-	def __init__(self, data_path, split, flux_type="normalized_flux"):
+	def __init__(self, data_path, split, flux_type="normalized_flux_cont"):
 		self.data_path = data_path
 		self.split = split
 		self.flux_type = flux_type
-		if self.flux_type == "normalized_flux":
-			mean_key = "norm_mean"
-			std_key = "norm_std"
-		else:
+		if self.flux_type == "normalized_flux_cont":
+			mean_key = "norm_mean_cont"
+			std_key = "norm_std_cont"
+		elif self.flux_type == "raw_flux":
 			mean_key = "raw_mean"
 			std_key = "raw_std"
+		elif self.flux_type == "normalized_flux_med":
+			mean_key = "norm_mean_med"
+			std_key = "norm_std_med"
+		elif self.flux_type == "log_scale_flux":
+			mean_key = "norm_mean_log"
+			std_key = "norm_std_log"
+		else:
+			logger.info("WARNING: INVALID flux type, defaulting to normalized_flux_cont")
+			self.flux_type = "normalized_flux_cont"
+			mean_key = "norm_mean_cont"
+			std_key = "norm_std_cont"
+
 
 		with h5py.File(self.data_path, "r") as hf:
 			self.l = hf.attrs["wavelengths"][:]

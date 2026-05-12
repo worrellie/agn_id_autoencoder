@@ -72,34 +72,28 @@ class Trainer:
 				device_type=self.device.type, dtype=self.autocast_type
 			)
 
-	def train_ae(self, epochs, train_loader, valid_loader=None, verbose=False):
+	def train_ae(self, epochs, train_loader, valid_loader=None, nomrmalize=False, verbose=False):
 
 		train_mean = train_loader.dataset.mean
 		train_std = train_loader.dataset.std
 
-		normalize = False
-
-		log_scale = False
+		# normalize = False
 		clip = False
 
-		if train_mean is not None and train_std is not None:
-			normalize = True
+		# if train_mean is not None and train_std is not None:
+		# 	normalize = True
 
 		# # FOR TESTING
 		# normalize = False
-		# log_scale = False
 		# clip = False
 		# #############
 
 		if clip:
 			print(f"Applying clipping to input data (clipped beyond -5)")
-		if log_scale:
-			print(f"Applying log transformation to input data")
 		if normalize:
 			print(f"Applying Z-score normalization to input data")
-		if not normalize and not clip and not log_scale:
+		if not normalize and not clip:
 			print(f"No clipping or normalization applied")
-
 
 		self.model.to(self.device)
 
@@ -111,7 +105,6 @@ class Trainer:
 		valid_kls = []
 
 		print(f'norm: {normalize}')
-		print(f'log scale: {log_scale}')
 		print(f'clip: {clip}')
 
 		logger.info("training model...")
@@ -134,51 +127,33 @@ class Trainer:
 
 			for x, x_mask in train_loader:
 
-				# # for understanding exploding gradient problem
-				# # check min and max incoming x values
-				# all_vals = []
-				# all_vals.append(x[x_mask])
-				# if len(all_vals) > 20:
-				# 	break
-				# all_vals = torch.cat(all_vals)
-				# print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
-				# print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
-				# print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
+				# for understanding exploding gradient problem
+				# check min and max incoming x values
+				all_vals = []
+				all_vals.append(x[x_mask])
+				if len(all_vals) > 20:
+					break
+				all_vals = torch.cat(all_vals)
+				print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
+				print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
+				print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
 
-				# stded = (all_vals - train_mean)/ train_std
-				# print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
-				# print(f"                       std={stded.std():.3f}")
+				stded = (all_vals - train_mean)/ train_std
+				print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
+				print(f"                       std={stded.std():.3f}")
 				
-
-				if clip:
-					x = torch.clamp(x, min = -5.0)
-					x = x * x_mask
-				if log_scale:
-					offset = 5 + 1e-8
-					x = torch.asinh(x + offset)
-					x = x * x_mask
 				if normalize:
 					x = (x - train_mean) / train_std  # normalize data
 					x = x * x_mask  # re-set 'gaps'/masked regions as zero
-
-
-				elif normalize and not clip:
-					x = (x - train_mean) / train_std  # normalize data
-					x = x * x_mask  # re-set 'gaps'/masked regions as zero
-				elif normalize and clip:
-					x = torch.clamp(x, min = -5.0)
-					x = (x - train_mean) / train_std  # normalize data
-					x = x * x_mask  # re-set 'gaps'/masked regions as zero
-				elif clip and not normalize:
+				if clip:
 					x = torch.clamp(x, min = -5.0)
 					x = x * x_mask
-
 
 				x = x.to(self.device)
 				x_mask = x_mask.to(self.device)
 
 				"""
-				consider: float32 takes up a lot of memory but is very precise.
+				consider the case for autocasting: float32 takes up a lot of memory but is very precise.
 				autocast can switch to float16 (50% less memory) for speed and then
 				back to float32 when precision is critical.
 				warning: very small gradients can turn into zero in float16.
@@ -190,7 +165,7 @@ class Trainer:
 
 				if self.use_autocast:
 
-					print('autocasr in action')
+					print('autocast in action')
 
 					with self.get_autocast_context():
 
