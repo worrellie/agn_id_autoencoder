@@ -11,7 +11,7 @@ def main():
 
 	parser = argparse.ArgumentParser()
 
-	parser.add_argument("--folder", "-f", default=r"test_all_spectra_sf_q")
+	parser.add_argument("--folder", "-f", default=r"test_spec")
 
 	# setup
 

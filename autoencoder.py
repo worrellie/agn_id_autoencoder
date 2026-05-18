@@ -21,17 +21,22 @@ logger = logging.getLogger(__name__)
 
 
 class StandardAutoencoder(nn.Module):
-	def __init__(self, config, input_size, latent_size, activation="ReLU"):
+	def __init__(self, config, input_size, latent_size, flux_type, normalize, activation="ReLU"):
 		super(StandardAutoencoder, self).__init__()
 
-		self.act_func = getattr(
-			nn, activation
-		)()  # make instance of desired activation function
+		self.type = "sae"
+
+		self.flux_type = flux_type
+		self.normalize = normalize
+
+		self.mean = None
+		self.std = None
+
+		self.act_func = getattr(nn, activation)()  # make instance of desired activation function
 
 		self.encoder_layers = nn.ModuleList()
 		self.decoder_layers = nn.ModuleList()
 
-		self.type = "sae"
 
 		self.input_to_encoder = nn.Linear(input_size, config[0]["in"])
 
@@ -79,10 +84,13 @@ class StandardAutoencoder(nn.Module):
 
 
 class VAEAutoencoder(nn.Module):
-	def __init__(self, config, input_size, latent_size, activation="ReLU"):
+	def __init__(self, config, input_size, latent_size, flux_type, normalize, activation="ReLU"):
 		super(VAEAutoencoder, self).__init__()
 
 		self.type = "vae"
+
+		self.flux_type = flux_type
+		self.normalize = normalize
 
 		self.act_func = getattr(
 			nn, activation

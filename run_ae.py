@@ -217,6 +217,7 @@ def main():
 	WEIGHT_DECAY = args.weight_decay
 
 	normalize = args.normalize
+	flux_type = args.flux_type
 
 	#####################################################################################################
 
@@ -279,7 +280,7 @@ def main():
 
 	DATA = args.filename
 
-	flux_type = args.flux_type
+
 
 	# default is normalised data
 	train = H5SpecDataset(DATA, split="train", flux_type=flux_type)
@@ -328,11 +329,11 @@ def main():
 
 	if args.model_type == "StandardAutoencoder":
 		model = ae.StandardAutoencoder(
-			CONFIG, INPUT_SIZE, LATENT_SIZE, activation=ACTIVATION_FUNCTION
+			CONFIG, INPUT_SIZE, LATENT_SIZE, flux_type, normalize, activation=ACTIVATION_FUNCTION
 		)
 	elif args.model_type == "VariationalAutoencoder":
 		model = ae.VAEAutoencoder(
-			CONFIG, INPUT_SIZE, LATENT_SIZE, activation=ACTIVATION_FUNCTION
+			CONFIG, INPUT_SIZE, LATENT_SIZE, flux_type, normalize, activation=ACTIVATION_FUNCTION
 		)
 	else:
 		exit()
@@ -359,7 +360,7 @@ def main():
 		device, TEST_NAME, model, optimizer, early_stopping, BETA, test=TESTING
 	)
 	model, model_losses = trainer.train_ae(
-		EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb, normalize=normalize,
+		EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb,
 	)
 	stop = time.time()
 

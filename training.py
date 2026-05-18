@@ -72,10 +72,15 @@ class Trainer:
 				device_type=self.device.type, dtype=self.autocast_type
 			)
 
-	def train_ae(self, epochs, train_loader, valid_loader=None, normalize=False, verbose=False):
+	def train_ae(self, epochs, train_loader, valid_loader=None, verbose=False):
 
 		train_mean = train_loader.dataset.mean
 		train_std = train_loader.dataset.std
+
+		normalize = self.model.normalize
+		flux_type = self.model.flux_type
+		self.model.mean = train_mean
+		self.model.std = train_std
 
 		# normalize = False
 		clip = False
@@ -141,7 +146,8 @@ class Trainer:
 				stded = (all_vals - train_mean)/ train_std
 				print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
 				print(f"                       std={stded.std():.3f}")
-				
+				#############################################################################################
+
 				if normalize:
 					x = (x - train_mean) / train_std  # normalize data
 					x = x * x_mask  # re-set 'gaps'/masked regions as zero
