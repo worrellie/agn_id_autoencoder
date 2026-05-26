@@ -140,68 +140,68 @@ def main():
 
 	#####################################################################################################
 	# for running multiple tests in cluster
-	if args.task_id is not None:
-		test_configs = [
-			{
-				"epochs": 100,
-				"latent": 32,
-				"learn_rate": 1e-4,
-				"weight_decay": 1e-4,
-				"beta": 0.0,
-				"model_type": "StandardAutoencoder",
-				"layers": "--layers-4",
-				"flux_type" : "log_scale_flux",
-				"normalize" : "normalize"
-			},
-			{
-				"epochs": 500,
-				"latent": 32,
-				"learn_rate": 1e-4,
-				"weight_decay": 1e-4,
-				"beta": 0.0,
-				"model_type": "StandardAutoencoder",
-				"layers": "--layers-4",
-				"flux_type" : "log_scale_flux",
-				"normalize" : "normalize"
-			},
-			{
-				"epochs": 1000,
-				"latent": 32,
-				"learn_rate": 1e-4,
-				"weight_decay": 1e-4,
-				"beta": 0.0,
-				"model_type": "StandardAutoencoder",
-				"layers": "--layers-4",
-				"flux_type" : "log_scale_flux",
-				"normalize" : "normalize"
-			}, 
-		]
-		c = test_configs[args.task_id]
-		args.flux_type = c["flux_type"]
-		args.normalize = c["normalize"]
-		args.epochs = c["epochs"]
-		args.latent = c["latent"]
-		args.learn_rate = c["learn_rate"]
-		args.weight_decay = c["weight_decay"]
-		args.beta = c["beta"]
-		args.model_type = c["model_type"]
-		# map layers string to the architecture const
-		layer_map = {
-			"--layers-1": [{"in": 512, "out": 256}],
+	# if args.task_id is not None:
+	# 	test_configs = [
+	# 		{
+	# 			"epochs": 100,
+	# 			"latent": 32,
+	# 			"learn_rate": 1e-4,
+	# 			"weight_decay": 1e-4,
+	# 			"beta": 0.0,
+	# 			"model_type": "StandardAutoencoder",
+	# 			"layers": "--layers-4",
+	# 			"flux_type" : "log_scale_flux",
+	# 			"normalize" : "normalize"
+	# 		},
+	# 		{
+	# 			"epochs": 500,
+	# 			"latent": 32,
+	# 			"learn_rate": 1e-4,
+	# 			"weight_decay": 1e-4,
+	# 			"beta": 0.0,
+	# 			"model_type": "StandardAutoencoder",
+	# 			"layers": "--layers-4",
+	# 			"flux_type" : "log_scale_flux",
+	# 			"normalize" : "normalize"
+	# 		},
+	# 		{
+	# 			"epochs": 1000,
+	# 			"latent": 32,
+	# 			"learn_rate": 1e-4,
+	# 			"weight_decay": 1e-4,
+	# 			"beta": 0.0,
+	# 			"model_type": "StandardAutoencoder",
+	# 			"layers": "--layers-4",
+	# 			"flux_type" : "log_scale_flux",
+	# 			"normalize" : "normalize"
+	# 		}, 
+	# 	]
+	# 	c = test_configs[args.task_id]
+	# 	args.flux_type = c["flux_type"]
+	# 	args.normalize = c["normalize"]
+	# 	args.epochs = c["epochs"]
+	# 	args.latent = c["latent"]
+	# 	args.learn_rate = c["learn_rate"]
+	# 	args.weight_decay = c["weight_decay"]
+	# 	args.beta = c["beta"]
+	# 	args.model_type = c["model_type"]
+	# 	# map layers string to the architecture const
+	# 	layer_map = {
+	# 		"--layers-1": [{"in": 512, "out": 256}],
 
-			"--layers-2": [{"in": 512, "out": 256}, 
-						   {"in": 256, "out": 64}],
+	# 		"--layers-2": [{"in": 512, "out": 256}, 
+	# 					   {"in": 256, "out": 64}],
 
-			"--layers-3": [{"in": 512, "out": 256},
-						   {"in": 256, "out": 128},
-						   {"in": 128, "out": 64},],
+	# 		"--layers-3": [{"in": 512, "out": 256},
+	# 					   {"in": 256, "out": 128},
+	# 					   {"in": 128, "out": 64},],
 
-			"--layers-4": [{"in": 700, "out": 512,},
-						   {"in": 512, "out": 256,},
-						   {"in": 256, "out": 128, },
-						   {"in": 128, "out": 64, },],
-		}
-		args.architecture = layer_map[c["layers"]]
+	# 		"--layers-4": [{"in": 700, "out": 512,},
+	# 					   {"in": 512, "out": 256,},
+	# 					   {"in": 256, "out": 128, },
+	# 					   {"in": 128, "out": 64, },],
+	# 	}
+	# 	args.architecture = layer_map[c["layers"]]
 
 	#####################################################################################################
 
@@ -286,12 +286,10 @@ def main():
 	train = H5SpecDataset(DATA, split="train", flux_type=flux_type)
 	valid = H5SpecDataset(DATA, split="validation", flux_type=flux_type)
 
+	num_workers = 0
 	if device.type == "cpu":
 		if os.environ.get("SLURM_CPUS_PER_TASK") is not None:
 			num_workers = 8
-	else:
-		# if gpu or not cluster
-		num_workers = 0
 
 	train_loader = torch.utils.data.DataLoader(
 		train, batch_size=batch_size_train, shuffle=True, num_workers=num_workers

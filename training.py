@@ -130,11 +130,11 @@ class Trainer:
 			logger.info(f"epoch {epoch} first param mean: {first_param.data.mean():.6f}")
 			logger.info(f"epoch {epoch} first x_hat mean: check below")
 
+			all_vals = []
 			for x, x_mask in train_loader:
 
 				# for understanding exploding gradient problem
 				# check min and max incoming x values
-				all_vals = []
 				all_vals.append(x[x_mask])
 				if len(all_vals) > 20:
 					break
@@ -150,10 +150,10 @@ class Trainer:
 
 				if normalize:
 					x = (x - train_mean) / train_std  # normalize data
-					x = x * x_mask  # re-set 'gaps'/masked regions as zero
 				if clip:
 					x = torch.clamp(x, min = -5.0)
-					x = x * x_mask
+
+				x = x * x_mask  # re-set 'gaps'/masked regions as zero
 
 				x = x.to(self.device)
 				x_mask = x_mask.to(self.device)
@@ -249,7 +249,8 @@ class Trainer:
 					for x, x_mask in valid_loader:
 						if normalize:
 							x = (x - train_mean) / train_std  # normalize data
-							x = x * x_mask  # re-set 'gaps'/masked regions as zer
+						
+						x = x * x_mask  # re-set 'gaps'/masked regions as zer
 
 						x = x.to(self.device)
 						x_mask = x_mask.to(self.device)

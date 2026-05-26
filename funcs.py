@@ -483,9 +483,9 @@ def plot_examples(loader, model, test_params, test=False):
 				x_hat_unscaled = torch.sign(x_hat_unscaled) * torch.expm1(torch.abs(x_hat_unscaled))
 				x_unscaled = torch.sign(x_unscaled.to(device)) * torch.expm1(torch.abs(x_unscaled.to(device)))
 			elif flux_type == "normalized_flux_cont":
-				pass
+				pass # not added yet
 			elif flux_type == "normalized_flux_med":
-				pass
+				pass # not addded yet
 			x_hat_unscaled = x_hat_unscaled * x_mask
 			x_unscaled = x_unscaled * x_mask
 			x_unscaled = x_unscaled.to(device)
