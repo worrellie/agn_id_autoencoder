@@ -14,6 +14,8 @@ import pickle as pkl
 from torch.utils.data import Subset
 import json
 
+import wandb
+
 import warnings
 # from ignite.engine import Engine, Events
 # from ignite.handlers import ModelCheckpoint
@@ -151,6 +153,7 @@ def plot_loss(model_losses, test_name, test=False):
 	ax2.tick_params(axis="y", labelcolor="tab:blue")
 
 	plt.tight_layout()
+
 	if not test:
 		pth_fig = path.Path(test_name, f"{test_name}_loss.png")
 		pth_obj = path.Path(test_name, f"{test_name}_loss.pkl")
@@ -160,295 +163,24 @@ def plot_loss(model_losses, test_name, test=False):
 	else:
 		plt.show()
 
-# def _get_example_specs(loader, model):
+def plot_dists(model_losses, test_name, test=False):
 
-# 	device = next(model.parameters()).device
+	train_l = model_losses["train_total"]
+	valid_l = model_losses["valid_total"]
 
-# 	# function to get the key spectra to compare
+	fig, ax = plt.subplots(figsize=(8, 4))
 
-# 	# temp loader to not shuffle data (so can get the right pairs)
-# 	temp_loader = torch.utils.data.DataLoader(
-# 		loader.dataset,
-# 		batch_size=loader.batch_size,
-# 		shuffle=False,
-# 	)
+	ax.hist(train_l, bins=50, color='steelblue', edgecolor='white', label="Train")
+	ax.hist(valid_l, bins=50, color='tomato', edgecolor='white', label="Valid")
 
-# 	train_mean = temp_loader.dataset.mean
-# 	train_std = temp_loader.dataset.std
-# 	# train_mean = None
-# 	# train_std = None
-# 	normalize = model.normalize
-# 	flux_type = model.flux_type
+	ax.set_xlabel('Reconstruction Loss (MSE)')
+	ax.set_ylabel('N')
+	ax.set_title('Loss Distribution (Scaled Space)')
 
-# 	# logger.info('predicting...')
-# 	losses_scaled_space = []
-# 	losses_unscaled_space = []
-# 	model.eval()
-# 	with torch.no_grad():
-# 		for x, x_mask in temp_loader:
+	plt.tight_layout()
 
-# 			x_unscaled = x * x_mask
-
-# 			if normalize:
-# 				x = (x - train_mean) / train_std  # normalize data
-# 				x = x * x_mask  # to ensure instrument gap has 0 flux
-
-# 			x = x.to(device)
-# 			x_mask = x_mask.to(device)
-# 			x_unscaled = x_unscaled.to(device)
-
-# 			x_hat, mu, logvar = model(x)
-
-# 			mses_scaled_space = loss_calc_per_spec(x_hat, x, x_mask,)
-# 			mses_scaled_space = mses_scaled_space.cpu().tolist()
-# 			losses_scaled_space.extend(mses_scaled_space)
-			
-# 			device_std = torch.tensor(train_std, device=device)
-# 			device_mean = torch.tensor(train_mean, device=device)
-
-# 			x_hat_unscaled = (x_hat * device_std) + device_mean
-# 			x_hat_unscaled = x_hat_unscaled
-
-# 			if flux_type == "log_scale_flux":
-# 				x_hat_unscaled = torch.sign(x_hat_unscaled) * torch.expm1(torch.abs(x_hat_unscaled))
-# 				x_unscaled = torch.sign(x_unscaled) * torch.expm1(torch.abs(x_unscaled))
-# 			elif flux_type=="normalized_flux_cont":
-# 				# not yet implemented
-# 				x_hat_unscaled = x_hat_unscaled
-# 				x_unscaled = x_unscaled
-# 			elif flux_type == "normalized_flux_med":
-# 				# not yet implemented
-# 				x_hat_unscaled = x_hat_unscaled
-# 				x_unscaled = x_unscaled
-
-# 			x_hat_unscaled = x_hat_unscaled * x_mask
-# 			x_unscaled = x_unscaled * x_mask
-
-# 			mses_unscaled_space = loss_calc_per_spec(x_hat_unscaled, x_unscaled, x_mask,)
-# 			mses_unscaled_space = mses_unscaled_space.cpu().tolist()
-# 			losses_unscaled_space.extend(mses_unscaled_space)
-
-# 	to_find_scaled_space = {
-# 		"min": np.min(losses_scaled_space),
-# 		"max": np.max(losses_scaled_space),
-# 		"25th": np.percentile(losses_scaled_space, 25),
-# 		"mean": np.mean(losses_scaled_space),
-# 		"75th": np.percentile(losses_scaled_space, 75),
-# 	}
-
-# 	to_find_unscaled_space = {
-# 		"min": np.min(losses_unscaled_space),
-# 		"max": np.max(losses_unscaled_space),
-# 		"25th": np.percentile(losses_unscaled_space, 25),
-# 		"mean": np.mean(losses_unscaled_space),
-# 		"75th": np.percentile(losses_unscaled_space, 75),
-# 	}
-
-# 	logger.info("getting min, max, mean and quartiles of losses...")
-
-# 	idxs_scaled = []
-# 	labels_scaled = []
-# 	for key, value in to_find_scaled_space.items():
-# 		idx = (np.abs(np.array(losses_scaled_space) - value)).argmin()
-# 		idxs_scaled.append(idx)
-# 		labels_scaled.append(key)
-
-# 	source_subset_scaled = Subset(loader.dataset, idxs_scaled)
-# 	subset_loader_scaled = torch.utils.data.DataLoader(
-# 		source_subset_scaled, batch_size=1, shuffle=False
-# 	)
-# 	subset_loader_scaled.dataset.labels = labels_scaled
-
-# 	idxs_unscaled = []
-# 	labels_unscaled = []
-# 	for key, value in to_find_unscaled_space.items():
-# 		idx = (np.abs(np.array(losses_unscaled_space) - value)).argmin()
-# 		idxs_unscaled.append(idx)
-# 		labels_unscaled.append(key)
-
-# 	source_subset_unscaled = Subset(loader.dataset, idxs_unscaled)
-# 	subset_loader_unscaled = torch.utils.data.DataLoader(
-# 		source_subset_unscaled, batch_size=1, shuffle=False
-# 	)
-# 	subset_loader_unscaled.dataset.labels = labels_unscaled
-
-# 	return subset_loader_scaled, subset_loader_unscaled
-
-# def _predict_examples(subset_loader_scaled, subset_loader_unscaled, model,):
-
-# 	device = next(model.parameters()).device
-
-# 	train_mean = subset_loader_scaled.dataset.dataset.mean
-# 	train_std = subset_loader_scaled.dataset.dataset.std
-# 	normalize = model.normalize
-# 	flux_type = model.flux_type
-	
-# 	# We will build output templates for both spaces dynamically
-# 	spaces = {
-# 		"scaled": {
-# 			"loader": subset_loader_scaled,
-# 			"labels": getattr(subset_loader_scaled.dataset, 'labels', [])
-# 			},
-#         "unscaled": {
-#             "loader": subset_loader_unscaled,
-#             "labels": getattr(subset_loader_unscaled.dataset, 'labels', [])
-#         }
-#     }
-
-# 	results = {}
-
-# 	model.eval()
-
-# 	for space_key, config in spaces.items():
-# 		output = {
-# 			"recon": [],
-# 			"original": [],
-# 			"mask": [],
-# 			"loss": [],
-# 			"label": config["labels"],
-# 			"mean": train_mean,
-# 			"std": train_std,
-# 		}
-
-# 		logger.info("predicting min, max, mean and quartiles...")
-
-# 		with torch.no_grad():
-# 			for x, x_mask in config["loader"]:
-# 				x_ground_truth = x * x_mask
-# 				if normalize:
-# 					x = (x - train_mean) / train_std  # normalize data
-# 					x = x * x_mask  # to ensure instrument gap has 0 flux
-
-# 				x = x.to(device)
-# 				x_mask = x_mask.to(device)
-# 				x_ground_truth = x_ground_truth.to(device)
-
-# 				x_hat, mu, logvar = model(x)
-
-# 				if space_key == "scaled":
-#                     # Scaled Space targets the raw neural network output values
-#                     mses = loss_calc_per_spec(x_hat, x, x_mask)
-                    
-#                     output["recon"].extend(x_hat.cpu().tolist())
-#                     output["original"].extend(x.cpu().tolist())
-# 				else:
-#                     # Unscaled Space reverses normalization and log transformations
-#                     device_std = torch.tensor(train_std, device=device)
-#                     device_mean = torch.tensor(train_mean, device=device)
-                    
-#                     x_hat_unscaled = (x_hat * device_std) + device_mean
-                    
-#                     if flux_type == "log_scale_flux":
-#                         x_hat_unscaled = torch.sign(x_hat_unscaled) * torch.expm1(torch.abs(x_hat_unscaled))
-#                         x_ground_truth = torch.sign(x_ground_truth) * torch.expm1(torch.abs(x_ground_truth))
-                    
-#                     x_hat_unscaled = x_hat_unscaled * x_mask
-#                     x_ground_truth = x_ground_truth * x_mask
-                    
-#                     mses = loss_calc_per_spec(x_hat_unscaled, x_ground_truth, x_mask)
-                    
-#                     output["recon"].extend(x_hat_unscaled.cpu().tolist())
-#                     output["original"].extend(x_ground_truth.cpu().tolist())
-
-# 				output["mask"].extend(x_mask.cpu().tolist())
-# 				output["loss"].extend(mses.cpu().tolist())
-
-# 			results[space_key] = output
-
-
-# 	return results["scaled"], results["unscaled"]
-
-# def _plot_example_specs(output,	l,):
-
-# 	fig = plt.figure(figsize=(20, 10))
-
-# 	# We use 6 columns to allow 3-over-2 centering
-# 	# 4 rows: [Fit 1, Res 1, Fit 2, Res 2] - we handle vertical pairs manually
-# 	gs = fig.add_gridspec(4, 6, height_ratios=[3, 1, 3, 1], hspace=0.4, wspace=0.4)
-
-# 	# --- TOP ROW (3 Plots) ---
-# 	# Column spans: 0-2, 2-4, 4-6
-# 	for i in range(3):
-# 		# Fit at row 0, Res at row 1
-# 		ax_fit = fig.add_subplot(gs[0, 2 * i : 2 * i + 2])
-# 		ax_res = fig.add_subplot(gs[1, 2 * i : 2 * i + 2], sharex=ax_fit)
-
-# 		_draw_spec_pair(ax_fit, ax_res, output, i, l)
-
-# 	# --- BOTTOM ROW (2 Plots) ---
-# 	# Column spans: 0-3, 3-6 (Centering them)
-# 	for i in range(2):
-# 		idx = i + 3  # Accessing samples 4 and 5 in your output
-# 		# Fit at row 2, Res at row 3
-# 		ax_fit = fig.add_subplot(gs[2, 3 * i : 3 * i + 3])
-# 		ax_res = fig.add_subplot(gs[3, 3 * i : 3 * i + 3], sharex=ax_fit)
-
-# 		_draw_spec_pair(ax_fit, ax_res, output, idx, l)
-
-# 	plt.tight_layout()
-# 	# plt.show()
-
-# 	return fig
-
-# def _draw_spec_pair(ax_fit,	ax_res,	output,	i,	l,):
-
-# 	mean = output["mean"]
-# 	std = output["std"]
-
-# 	recon = (np.array(output["recon"][i]) * std) + mean
-# 	og = (np.array(output["original"][i]) * std) + mean
-
-# 	mask = np.array(output["mask"][i])
-
-# 	resid = og - recon
-
-# 	recon[mask == 0] = np.nan
-# 	og[mask == 0] = np.nan
-# 	resid[mask == 0] = np.nan
-
-# 	# Fit Panel
-# 	ax_fit.step(
-# 		l,
-# 		og,
-# 		color="black",
-# 		linewidth=2,
-# 		alpha=0.7,
-# 		where="mid",
-# 		label="Original Spectrum",
-# 	)
-# 	ax_fit.step(l, recon, color="red", linewidth=1, where="mid", label="Reconstructed")
-# 	ax_fit.set_title(f"{output['label'][i]}, loss: {output['loss'][i]:.5f}")
-
-# 	# Residual Panel
-# 	ax_res.scatter(l, resid, color="gray")  # residuals of standardized data
-# 	ax_res.axhline(0, color="black", lw=0.8, ls=":")
-
-# def plot_examples_old(loader, model, test_params, test=False):
-
-# 	l = loader.dataset.l
-
-# 	subset_loader = _get_example_specs(loader, model)
-
-# 	output = _predict_examples(subset_loader, model)
-
-# 	fig = _plot_example_specs(
-# 		output,
-# 		l,
-# 	)
-
-# 	fig.suptitle(
-# 		f"latent: {test_params['latent_size']}, {test_params['activation_function']}, epochs: {test_params['max_epochs']}"
-# 	)
-
-# 	plt.tight_layout()
-# 	if not test:
-# 		pth_fig = path.Path(test_params["test_name"], f"{test_params['test_name']}.png")
-# 		pth_obj = path.Path(test_params["test_name"], f"{test_params['test_name']}.pkl")
-# 		plt.savefig(pth_fig)
-# 		with open(pth_obj, "wb") as o:
-# 			pkl.dump(fig, o)
-# 	else:
-# 		plt.show()
+	wandb.log({"hist/scaled_compare": wandb.Image(fig)})
+	plt.close(fig)
 
 def plot_examples(loader, model, test_params, test=False):
 
@@ -487,8 +219,8 @@ def plot_examples(loader, model, test_params, test=False):
 			elif flux_type == "normalized_flux_med":
 				pass # not addded yet
 			x_hat_unscaled = x_hat_unscaled * x_mask
-			x_unscaled = x_unscaled * x_mask
-			x_unscaled = x_unscaled.to(device)
+			x_unscaled = x_unscaled.to(device) * x_mask
+			x_unscaled = x_unscaled
 
 			losses_of_unscaled = loss_calc_per_spec(x_hat_unscaled, x_unscaled, x_mask)
 
@@ -503,23 +235,26 @@ def plot_examples(loader, model, test_params, test=False):
 					"loss_unscaled":     losses_of_unscaled[i].item(),
 				})
 
-	all_losses = np.array([o["loss_scaled"] for o in outputs])
+	all_losses_unscaled = np.array([o["loss_unscaled"] for o in outputs])
+
+	all_losses_scaled = np.array([o["loss_scaled"] for o in outputs])
 	# get percentiles for examples of wht different loss scores look like
 	targets = {
-	"min":  np.min(all_losses),
-	"25th": np.percentile(all_losses, 25),
-	"mean": np.mean(all_losses),
-	"75th": np.percentile(all_losses, 75),
-	"max":  np.max(all_losses),
+	"min":  np.min(all_losses_scaled),
+	"25th": np.percentile(all_losses_scaled, 25),
+	"mean": np.mean(all_losses_scaled),
+	"75th": np.percentile(all_losses_scaled, 75),
+	"max":  np.max(all_losses_scaled),
 	}
 
 	examples = []
 	for label, target in targets.items():
-		example = outputs[int(np.argmin(np.abs(all_losses - target)))]
+		example = outputs[int(np.argmin(np.abs(all_losses_scaled - target)))]
 		example["label"] = label
 		examples.append(example)
 	
 	# plotting
+	recon_examples = {}
 	for space in ("scaled", "unscaled"):
 		fig, axes = plt.subplots(5, 2, figsize=(16, 20))
 		fig.suptitle(
@@ -544,12 +279,39 @@ def plot_examples(loader, model, test_params, test=False):
 			ax_res.set_ylabel("Residual")
 
 		plt.tight_layout()
+
+		recon_examples[space] = fig
+
 		if not test:
+			# note: only saves unscaled
 			pth = path.Path(test_params["test_name"], f"{test_params['test_name']}_{space}.png")
 			plt.savefig(pth)
 			plt.close(fig)
+
 		else:
 			plt.show()
+
+	fig_scaled = recon_examples["scaled"]
+	fig_unscaled = recon_examples["unscaled"]
+
+	loss_stats = {
+		"scaled": {
+			"mean":   float(np.mean(all_losses_scaled)),
+			"median": float(np.median(all_losses_scaled)),
+			"std":    float(np.std(all_losses_scaled)),
+			"p95":    float(np.percentile(all_losses_scaled, 95)),
+			"max":    float(np.max(all_losses_scaled)),
+		},
+		"unscaled": {
+			"mean":   float(np.mean(all_losses_unscaled)),
+			"median": float(np.median(all_losses_unscaled)),
+			"std":    float(np.std(all_losses_unscaled)),
+			"p95":    float(np.percentile(all_losses_unscaled, 95)),
+			"max":    float(np.max(all_losses_unscaled)),
+		},
+	} 
+
+	return fig_scaled, fig_unscaled, loss_stats
 
 
 def save_test_params(test_dict, test_name, test=False):

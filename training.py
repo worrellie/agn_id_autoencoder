@@ -16,6 +16,8 @@ import warnings
 import funcs
 import json
 
+import wandb
+
 import logging
 
 logger = logging.getLogger(__name__)
@@ -113,6 +115,11 @@ class Trainer:
 		print(f'clip: {clip}')
 
 		logger.info("training model...")
+
+		# define metric for wandb
+		wandb.define_metric("epoch")
+		wandb.define_metric("metrics/*", step_metric="epoch")
+		wandb.define_metric("total_loss/*",  step_metric="epoch")
 
 		for epoch in range(epochs):
 			self.model.train()
@@ -219,13 +226,23 @@ class Trainer:
 				# in case drop_last is True, divide by number used, rather than dataset size
 				processed_samples += x.size(0)
 
+
 			epoch_avg_mse = train_mse / processed_samples
-			train_mses.append(epoch_avg_mse)
+			train_mses.append(epoch_avg_mse) # mse for epoch
+
 			epoch_avg_kl = train_kl / processed_samples
-			train_kls.append(epoch_avg_kl)
+			train_kls.append(epoch_avg_kl) # kl for epoch
 
 			epoch_avg_loss = train_loss / processed_samples  # average loss per sample
-			train_losses.append(epoch_avg_loss)  # losses for each epoch
+			train_losses.append(epoch_avg_loss)  # total loss for epoch
+
+			# log in wandb
+			wandb.log({
+				    "epoch": epoch,
+					"total_loss/train" : epoch_avg_loss,
+					"metrics/train_mse" : epoch_avg_mse,
+					"metrics/train_kl" : epoch_avg_kl,
+			})
 
 			logger.info("-------------------------------------------")
 			logger.info(
@@ -279,15 +296,25 @@ class Trainer:
 
 					epoch_avg_valid_mse = valid_mse / processed_samples_valid
 					valid_mses.append(epoch_avg_valid_mse)
+
 					epoch_avg_valid_kl = valid_kl / processed_samples_valid
 					valid_kls.append(epoch_avg_valid_kl)
 
 					epoch_avg_valid_loss = valid_loss / processed_samples_valid
 					valid_losses.append(epoch_avg_valid_loss)
 
+					# log in wandb
+				wandb.log({
+				    "epoch": epoch,
+					"total_loss/valid" : epoch_avg_valid_loss,
+					"metrics/valid_mse" : epoch_avg_valid_mse,
+					"metrics/valid_kl" : epoch_avg_valid_kl,
+				})
+
 				logger.info(
 					f"valid: epoch {epoch + 1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}"
 				)
+
 
 				if self.early_stopping is not None:
 					self.early_stopping.check_early_stop(
@@ -299,8 +326,20 @@ class Trainer:
 						logger.info(f"Early Stopping: epoch {epoch}")
 						logger.info("---------------------------------")
 						break
+			
+			# stream losses for each epoch to W and B
 
 		logger.info("training finished")
+		# stream 'final' to wandb
+		wandb.log({
+			"final/train_loss": train_losses[-1],
+			"final/valid_loss": valid_losses[-1],
+			"final/best_valid": min(valid_losses),
+			"final/best_epoch": int(np.argmin(valid_losses)),
+			"final/train_at_best": train_losses[int(np.argmin(valid_losses))],
+			"final/overfit_gap": train_losses[int(np.argmin(valid_losses))] - min(valid_losses),
+		})
+
 		# when at end of training, save (if not a test)
 		if not self.test:
 			save_path_dict = path.Path(

@@ -20,12 +20,16 @@ import training
 import argparse
 import time
 
+import wandb
+
 import logging
 
 logger = logging.getLogger(__name__)
 
 
 def main():
+
+	wandb.login(key="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")
 
 	###############
 	###############
@@ -54,9 +58,11 @@ def main():
 	)
 
 	parser.add_argument("-f", "--filename", default="all_spectra.h5")
+	parser.add_argument("-p", "--project_name", default="unspecified_project")
 	parser.add_argument("-ft", "--flux_type", default="normalized_flux_cont")
 
-	parser.add_argument( "-n", "--normalize", action="store_true" )  # if -s is parsed, True is returned
+	# note this is for standardizing before training
+	parser.add_argument( "-n", "--normalize", action="store_true" )  # if -n is parsed, True is returned
 
 	parser.add_argument("-e", "--epochs", default=10, type=int)
 	parser.add_argument( "-s", "--early_stop", action="store_true" )  # if -s is parsed, True is returned
@@ -325,6 +331,7 @@ def main():
 
 	funcs.save_test_params(test_params, TEST_NAME, test=TESTING)
 
+	model = None
 	if args.model_type == "StandardAutoencoder":
 		model = ae.StandardAutoencoder(
 			CONFIG, INPUT_SIZE, LATENT_SIZE, flux_type, normalize, activation=ACTIVATION_FUNCTION
@@ -335,9 +342,32 @@ def main():
 		)
 	else:
 		exit()
+
+	######################################################################################################
+	### W AND B ###
+
+	run = wandb.init(
+		entity = "worrellie-iastro",
+		project = args.project_name,
+		# hyperparams and metadata
+		config = test_params,
+		name = TEST_NAME
+	)
+	wandb.config.update({
+		"architecture" : CONFIG,
+		"n_layers" : len(CONFIG),
+		"normalize" : normalize,
+		"input_size" : INPUT_SIZE,
+		"early_stopping": EARLY_STOPPING,
+		"n_train" : len(train),
+		"n_valid" : len(valid),
+		})
+
+
 	######################################################################################################
 
 	logger.info(model)
+	wandb.config.update({"model_size_mb" : funcs.get_model_size_mb(model)})
 
 	if EARLY_STOPPING:
 		early_stopping = training.CustomEarlyStopping(
@@ -362,11 +392,35 @@ def main():
 	)
 	stop = time.time()
 
+	wandb.log({"train_time" : stop - start})
+
 	logger.info(f"{stop - start} seconds to train")
 
 	funcs.plot_loss(model_losses, test_params["test_name"], test=TESTING)
+	funcs.plot_dists(model_losses, test_params["test_name"], test=TESTING)
 
-	funcs.plot_examples(train_loader, model, test_params, test=TESTING)
+	train_fig_scaled, train_fig_unscaled, _ = funcs.plot_examples(train_loader, model, test_params, test=TESTING)
+	wandb.log({"references/train_scaled":   wandb.Image(train_fig_scaled),
+        	"references/train_unscaled": wandb.Image(train_fig_unscaled)})
+
+	
+	valid_fig_scaled, valid_fig_unscaled, valid_losses = funcs.plot_examples(valid_loader, model, test_params, test=TESTING)
+	wandb.log({"references/valid_scaled":   wandb.Image(valid_fig_scaled),
+        	"references/valid_unscaled": wandb.Image(valid_fig_unscaled),})
+
+	wandb.log({
+		# scaled space - for cross-run comparison
+		"loss_dist/valid_scaled_mean":   valid_losses["scaled"]["mean"],
+		"loss_dist/valid_scaled_median": valid_losses["scaled"]["median"],
+		"loss_dist/valid_scaled_p95":    valid_losses["scaled"]["p95"],
+		"loss_dist/valid_scaled_max":    valid_losses["scaled"]["max"],
+
+		# unscaled space - physically meaningful
+		"loss_dist/valid_unscaled_mean":   valid_losses["unscaled"]["mean"],
+		"loss_dist/valid_unscaled_median": valid_losses["unscaled"]["median"],
+		"loss_dist/valid_unscaled_p95":    valid_losses["unscaled"]["p95"],
+		"loss_dist/valid_unscaled_max":    valid_losses["unscaled"]["max"],
+	})
 	# funcs.plot_examples(valid_loader, model, test_params, test = TESTING)
 
 
