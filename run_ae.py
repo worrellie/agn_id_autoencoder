@@ -297,7 +297,7 @@ def main():
 
 	if EARLY_STOPPING:
 		early_stopping = training.CustomEarlyStopping(
-			test_params, patience=10, delta=0.0, test=TESTING, verbose=verb
+			test_params, patience=10, delta=2, test=TESTING, verbose=verb
 		)
 	else:
 		early_stopping = None
@@ -312,7 +312,7 @@ def main():
 	trainer = training.Trainer(
 		device, test_params, model, optimizer, early_stopping, BETA, test=TESTING
 	)
-	model, losses_per_epoch = trainer.train_ae(EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb,)
+	model, best_model, losses_per_epoch = trainer.train_ae(EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb,)
 	stop = time.time()
 	#
 

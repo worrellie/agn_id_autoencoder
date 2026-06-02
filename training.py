@@ -15,7 +15,7 @@ import h5py
 import warnings
 import funcs
 import json
-
+import copy
 import wandb
 
 import logging
@@ -32,6 +32,7 @@ class Trainer:
 
 		self.test_name = test_params["test_name"]
 		self.model = model
+		self.best_model = None
 		self.optimizer = optimizer
 		self.early_stopping = early_stopping
 		self.beta = beta
@@ -126,8 +127,12 @@ class Trainer:
 		wandb.define_metric("metrics/*", step_metric="epoch")
 		wandb.define_metric("total_loss/*",  step_metric="epoch")
 
+		best_validation = float('inf')
+
 		for epoch in range(epochs):
+
 			self.model.train()
+
 			train_loss = 0
 			train_mse = 0
 			train_kl = 0
@@ -256,6 +261,7 @@ class Trainer:
 				f"training: epoch {epoch + 1}/{epochs},\ntotal loss: {epoch_avg_loss:.10f},\nmse: {epoch_avg_mse:.10f},\nkl: {epoch_avg_kl:e}"
 			)
 
+
 			if valid_loader is not None:
 				# dont update weights/ train
 				self.model.eval()
@@ -328,7 +334,6 @@ class Trainer:
 					unscaled_epoch_avg_valid_rel_mse = valid_rel_mse_unscaled / processed_samples_valid
 					valid_rel_mses_unscaled.append(unscaled_epoch_avg_valid_rel_mse)
 
-
 				# log in wandb for epoch
 				wandb.log({
 				    "epoch": epoch,
@@ -347,43 +352,34 @@ class Trainer:
 
 				if self.early_stopping is not None:
 					self.early_stopping.check_early_stop(epoch_avg_valid_loss, self.model, epoch )
-
+					do_checkpoint = self.early_stopping.new_best
 					if self.early_stopping.stop_training:
 						logger.info("---------------------------------")
 						logger.info(f"Early Stopping: epoch {epoch}")
 						logger.info("---------------------------------")
 						break
+				else:
+					do_checkpoint = epoch_avg_valid_loss < best_validation
+					if do_checkpoint:
+						best_validation = epoch_avg_valid_loss
+
+				if do_checkpoint:
+					self.best_model = copy.deepcopy(self.model)
+					path_best_model = path.Path(self.test_name, f"{self.test_name}_best_model.pt")
+					self.checkpoint(self.model, path_best_model)
+
 			
 			# stream losses for each epoch to W and B
 
 		logger.info("training finished")
 		
-		# stream 'final' to wandb
-		# wandb.log({
-		# 	"final/train_loss": train_losses[-1],
-		# 	"final/valid_loss": valid_losses[-1],
-		# 	"final/best_valid_scaled": min(valid_losses),
-		# 	"final/best_valid_unscaled_mse": min(valid_mses_unscaled),  # target for wandb sweep
-		# 	"final/best_valid_unscaled_rel_mse": min(valid_rel_mses_unscaled),
-		# 	#
-		# 	"final/best_epoch_scaled": int(np.argmin(valid_losses)),
-		# 	"final/train_at_best_scaled": train_losses[int(np.argmin(valid_losses))],
-		# 	"final/overfit_gap_scaled": train_losses[int(np.argmin(valid_losses))] - min(valid_losses),
-		# 	#			
-		# 	"final/best_epoch_unscaled": int(np.argmin(valid_mses_unscaled)),
-		# 	"final/train_at_best_unscaled": train_losses[int(np.argmin(valid_mses_unscaled))],
-		# 	#			
-		# 	"final/best_epoch_rel_unscaled": int(np.argmin(valid_rel_mses_unscaled)),
-		# 	"final/train_at_best_rel_unscaled": train_losses[int(np.argmin(valid_rel_mses_unscaled))],
-		# })
-
 		# when at end of training, save (if not a test)
 		if not self.test:
 			save_path_dict = path.Path(
-				self.test_name, f"{self.test_name}_state_dict.pt"
+				self.test_name, f"{self.test_name}_final_model_state_dict.pt"
 			)  # overwrite is default
 			torch.save(self.model.state_dict(), save_path_dict)
-			save_path_model = path.Path(self.test_name, f"{self.test_name}_model.pt")
+			save_path_model = path.Path(self.test_name, f"{self.test_name}_final_model.pt")
 			torch.save(self.model, save_path_model)
 
 		# returns the mse, kl and total_loss of  each epoch for training data
@@ -411,10 +407,30 @@ class Trainer:
 			with open(loss_pth, "w") as p:
 				json.dump(model_losses_per_epoch, p)
 
-		# wandb summary for sweep
-		
 
-		return self.model, model_losses_per_epoch
+		return self.model, self.best_model, model_losses_per_epoch
+
+	def checkpoint(self, model, filename, optimizer=None):
+
+		if optimizer is not None:
+			save_dict = {'optimizer' : optimizer.state_dict(),
+						 'model' : model.state_dict(),
+						 }
+		else:
+			save_dict = {'model' : model.state_dict()}
+		
+		torch.save(save_dict, filename)
+
+	def resume(self, model, filename):
+
+		# does not account for optmizer yet
+
+		save_dict = torch.load(filename)
+
+		if 'optimizer' in save_dict.keys():
+			pass
+		else:
+			model.load_state_dict(save_dict['model'])
 
 
 class CustomEarlyStopping:
@@ -429,17 +445,6 @@ class CustomEarlyStopping:
 		self.test = test
 		self.test_name = test_params["test_name"]
 
-	def save_model(self, model, test_name, epoch):
-
-		save_path_dict = path.Path(
-			test_name, f"{test_name}_{self.patience}_{self.delta}_state_dict.pt"
-		)  # overwrite is default
-		torch.save(model.state_dict(), save_path_dict)
-		save_path_model = path.Path(
-			test_name, f"{test_name}_{self.patience}_{self.delta}_model.pt"
-		)  # overwrite is default
-		torch.save(model, save_path_model)
-
 	def check_early_stop(self, validation_loss, model, epoch):
 
 		if self.best_loss is None or validation_loss < self.best_loss - self.delta:
@@ -448,7 +453,8 @@ class CustomEarlyStopping:
 			# and save best model
 			self.best_loss = validation_loss
 			if not self.test:
-				self.save_model(model, self.test_name, epoch)
+				# self.save_model(model, self.test_name, epoch)
+				pass
 			self.no_improve_count = 0
 		else:
 			# if new validation loss is not better, increase count of no improvement
@@ -458,3 +464,10 @@ class CustomEarlyStopping:
 				self.stop_training = True
 				if self.verbose:
 					logger.info("Stopping Early")
+
+	# if there was just improvement, count is 0 and there is new best
+	@property # adding property decorator means method is like and attribute so 'new_best'
+			  # is equivalent to 'new_best()'
+	def new_best(self):
+
+		return self.no_improve_count == 0
