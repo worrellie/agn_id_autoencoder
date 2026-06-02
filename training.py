@@ -349,9 +349,10 @@ class Trainer:
 					f"valid: epoch {epoch + 1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}"
 				)
 
-
+				# metric for best model: unscaled_epoch_avg_valid_rel_mse
+				model_success_metric = unscaled_epoch_avg_valid_rel_mse
 				if self.early_stopping is not None:
-					self.early_stopping.check_early_stop(epoch_avg_valid_loss, self.model, epoch )
+					self.early_stopping.check_early_stop(model_success_metric, self.model, epoch )
 					do_checkpoint = self.early_stopping.new_best
 					if self.early_stopping.stop_training:
 						logger.info("---------------------------------")
@@ -359,9 +360,9 @@ class Trainer:
 						logger.info("---------------------------------")
 						break
 				else:
-					do_checkpoint = epoch_avg_valid_loss < best_validation
+					do_checkpoint = model_success_metric < best_validation
 					if do_checkpoint:
-						best_validation = epoch_avg_valid_loss
+						best_validation = model_success_metric
 
 				if do_checkpoint:
 					self.best_model = copy.deepcopy(self.model)
@@ -406,7 +407,6 @@ class Trainer:
 			loss_pth = path.Path(self.test_name, f"{self.test_name}_losses.json")
 			with open(loss_pth, "w") as p:
 				json.dump(model_losses_per_epoch, p)
-
 
 		return self.model, self.best_model, model_losses_per_epoch
 
