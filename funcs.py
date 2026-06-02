@@ -17,6 +17,8 @@ import json
 import wandb
 
 import warnings
+
+
 # from ignite.engine import Engine, Events
 # from ignite.handlers import ModelCheckpoint
 
@@ -43,7 +45,6 @@ def get_model_size_mb(model):
 	logger.info(f"model size: {total_size_mb}")
 
 	return total_size_mb
-
 
 def _loss_calc_batch(x_hat,	x,	x_mask,	mu=None, logvar=None, beta=0,):
 	"""
@@ -78,6 +79,30 @@ def _loss_calc_batch(x_hat,	x,	x_mask,	mu=None, logvar=None, beta=0,):
 
 	return recon_loss, kl_loss, total_loss
 
+def _rel_mse_calc_batch(x_hat,	x,	x_mask,	):
+	"""
+	function to get average loss of batch
+	"""
+
+	batch_size = x_hat.shape[0]
+	n_unmasked_pixels = x_mask.sum(dim=1)
+
+	# pixel-wise
+	sq_err_per_element = (x_hat - x) ** 2
+
+	rel_sq_err_per_element = sq_err_per_element / (x.abs() + 1e-10) # epsilon to not fail for 0 value pixels
+
+	# apply masks
+	masked_sq_err = rel_sq_err_per_element * x_mask
+
+	# rel mse per spec
+	masked_rel_mse_per_sample = masked_sq_err.sum(dim=1) / n_unmasked_pixels
+
+	# rel mean mse for batch
+	rel_mean_masked_mse_for_batch = masked_rel_mse_per_sample.sum() / batch_size
+
+	return rel_mean_masked_mse_for_batch
+
 def loss_calc_per_spec(x_hat, x, x_mask,):
 	"""
 	function to get MSE of each spectrum in batch
@@ -99,92 +124,37 @@ def loss_calc_per_spec(x_hat, x, x_mask,):
 
 	return recon_loss
 
-def plot_loss(model_losses, test_name, test=False):
+def rel_loss_calc_per_spec(x_hat, x, x_mask,):
+	"""
+	function to get MSE of each spectrum in batch
+	return list of MSEs that is same length as number of spec n batch
+	"""
 
-	# plots loss in SCALED SPACE
+	batch_size = x_hat.shape[0]
 
-	train_loss = model_losses["train_total"]
-	valid_loss = model_losses["valid_total"]
-	train_mse = model_losses["train_mse"]
-	valid_mse = model_losses["valid_mse"]
-	train_kl = model_losses["train_kl_raw"]
-	valid_kl = model_losses["valid_kl_raw"]
+	n_unmasked_pixels = x_mask.sum(dim=1)
 
-	epochs = range(1, len(train_loss) + 1)
+	# pixel-wise
+	sq_err_per_element = (x_hat - x) ** 2
 
-	plt.style.use("fivethirtyeight")
-	fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(16, 6))
+	rel_sq_err_per_element = sq_err_per_element / (x.abs() + 1e-10)
 
-	ax1.plot(epochs, train_loss, label="Train Total", alpha=0.8)
-	ax1.plot(epochs, valid_loss, label="Valid Total", alpha=0.8, linestyle="--")
-	ax1.set_title(f"Total Loss (Beta={model_losses['beta']})")
-	ax1.set_xlabel("Epochs")
-	ax1.set_ylabel("Loss Value")
-	ax1.legend()
+	# apply masks
+	masked_sq_err = rel_sq_err_per_element * x_mask
 
-	ax2.plot(epochs, train_mse, label="Train MSE", color="tab:blue")
-	ax2.plot(epochs, valid_mse, label="Valid MSE", color="tab:blue", linestyle="--")
+	# mse per spec
+	recon_loss = masked_sq_err.sum(dim=1) / n_unmasked_pixels
 
-	if any(k > 0 for k in train_kl):
-		ax2_kl = ax2.twinx()
-		ax2_kl.plot(
-			epochs, train_kl, label="Train KL (raw)", color="tab:red", alpha=0.6
-		)
-		ax2_kl.plot(
-			epochs,
-			valid_kl,
-			label="Valid KL (raw)",
-			color="tab:red",
-			alpha=0.6,
-			linestyle="--",
-		)
-		ax2_kl.set_ylabel("KL Divergence", color="tab:red")
-		ax2_kl.tick_params(axis="y", labelcolor="tab:red")
+	return recon_loss
 
-		lines, labels = ax2.get_legend_handles_labels()
-		lines2, labels2 = ax2_kl.get_legend_handles_labels()
-		ax2.legend(lines + lines2, labels + labels2, loc="upper right")
-	else:
-		ax2.legend()
+def get_predictions(loader, model, test_params, test = False):
+	# for getting metrics from a final model
 
-	ax2.set_title("Reconstruction (MSE) vs Regularization (KL)")
-	ax2.set_xlabel("Epochs")
-	ax2.set_ylabel("MSE Loss", color="tab:blue")
-	ax2.tick_params(axis="y", labelcolor="tab:blue")
-
-	plt.tight_layout()
-
-	if not test:
-		pth_fig = path.Path(test_name, f"{test_name}_loss.png")
-		pth_obj = path.Path(test_name, f"{test_name}_loss.pkl")
-		plt.savefig(pth_fig)
-		with open(pth_obj, "wb") as o:
-			pkl.dump(fig, o)
-	else:
-		plt.show()
-
-def plot_dists(model_losses, test_name, test=False):
-
-	train_l = model_losses["train_total"]
-	valid_l = model_losses["valid_total"]
-
-	fig, ax = plt.subplots(figsize=(8, 4))
-
-	ax.hist(train_l, bins=50, color='steelblue', edgecolor='white', label="Train")
-	ax.hist(valid_l, bins=50, color='tomato', edgecolor='white', label="Valid")
-
-	ax.set_xlabel('Reconstruction Loss (MSE)')
-	ax.set_ylabel('N')
-	ax.set_title('Loss Distribution (Scaled Space)')
-
-	plt.tight_layout()
-
-	wandb.log({"hist/scaled_compare": wandb.Image(fig)})
-	plt.close(fig)
-
-def plot_examples(loader, model, test_params, test=False):
+	test_name = test_params["test_name"]
 
 	device = next(model.parameters()).device
+
+	d_split = loader.dataset.split
 
 	l = loader.dataset.l
 	train_mean = loader.dataset.mean
@@ -224,75 +194,37 @@ def plot_examples(loader, model, test_params, test=False):
 
 			losses_of_unscaled = loss_calc_per_spec(x_hat_unscaled, x_unscaled, x_mask)
 
-			for i in range(x.shape[0]):
+			rel_losses = rel_loss_calc_per_spec(x_hat_unscaled, x_unscaled, x_mask)
+
+			for i in range(x.shape[0]): # for each spectrum make a dictionary with the info
 				outputs.append({
-					"mask":              x_mask[i].cpu().numpy().astype(bool),
-					"original_scaled":   x[i].cpu().numpy(),
-					"recon_scaled":      x_hat[i].cpu().numpy(),
-					"loss_scaled":       losses_of_scaled[i].item(),
-					"original_unscaled": x_unscaled[i].cpu().numpy(),
-					"recon_unscaled":    x_hat_unscaled[i].cpu().numpy(),
-					"loss_unscaled":     losses_of_unscaled[i].item(),
+					"mask": x_mask[i].cpu().numpy().astype(bool).tolist(), # spectrum mask
+					"original_scaled": x[i].cpu().numpy().tolist(), # original spectrum in scaled space
+					"recon_scaled": x_hat[i].cpu().numpy().tolist(), # reconstructed spectrum in scaled space
+					"loss_scaled": losses_of_scaled[i].item(), # MSE of spectrum reconstruction in scaled space
+					"original_unscaled": x_unscaled[i].cpu().numpy().tolist(), # original spectrum RAW, UNSCALED space
+					"recon_unscaled": x_hat_unscaled[i].cpu().numpy().tolist(), ## reconstructed spectrum RAW, UNSCALED space
+					"loss_unscaled": losses_of_unscaled[i].item(), # MSE of spectrum reconstruction in UNSCALED space
+					"rel_loss" : rel_losses[i].item(), # relative MSE in UNSCALED space
 				})
+
+	# save outputs
+	if not test:
+		pth = path.Path(test_name, f"{test_name}_{d_split}_outputs.json")
+		with open(pth, "w") as p:
+			json.dump(outputs, p)
+
+	return outputs
+
+def model_stats(outputs, test_params, best):
+
+	test_name = test_params["test_name"]
+
+	all_losses_scaled = np.array([o["loss_scaled"] for o in outputs])
 
 	all_losses_unscaled = np.array([o["loss_unscaled"] for o in outputs])
 
-	all_losses_scaled = np.array([o["loss_scaled"] for o in outputs])
-	# get percentiles for examples of wht different loss scores look like
-	targets = {
-	"min":  np.min(all_losses_scaled),
-	"25th": np.percentile(all_losses_scaled, 25),
-	"mean": np.mean(all_losses_scaled),
-	"75th": np.percentile(all_losses_scaled, 75),
-	"max":  np.max(all_losses_scaled),
-	}
-
-	examples = []
-	for label, target in targets.items():
-		example = outputs[int(np.argmin(np.abs(all_losses_scaled - target)))]
-		example["label"] = label
-		examples.append(example)
-	
-	# plotting
-	recon_examples = {}
-	for space in ("scaled", "unscaled"):
-		fig, axes = plt.subplots(5, 2, figsize=(16, 20))
-		fig.suptitle(
-			f"{space.upper()} — latent: {test_params['latent_size']}, "
-			f"{test_params['activation_function']}, epochs: {test_params['max_epochs']}"
-		)
-		for ax_row, ex in zip(axes, examples):
-			ax_fit, ax_res = ax_row
-			og    = ex[f"original_{space}"].copy()
-			recon = ex[f"recon_{space}"].copy()
-			mask  = ex["mask"]
-			og[~mask]    = np.nan
-			recon[~mask] = np.nan
-			resid = og - recon
-
-			ax_fit.step(l, og,    color="black", lw=1.5, alpha=0.7, where="mid", label="Original")
-			ax_fit.step(l, recon, color="red",   lw=1.0,             where="mid", label="Reconstructed")
-			ax_fit.set_title(f"{ex['label']}, loss: {ex[f'loss_{space}']:.5f}")
-			ax_fit.legend(fontsize=8)
-			ax_res.scatter(l, resid, color="gray", s=2)
-			ax_res.axhline(0, color="black", lw=0.8, ls=":")
-			ax_res.set_ylabel("Residual")
-
-		plt.tight_layout()
-
-		recon_examples[space] = fig
-
-		if not test:
-			# note: only saves unscaled
-			pth = path.Path(test_params["test_name"], f"{test_params['test_name']}_{space}.png")
-			plt.savefig(pth)
-			plt.close(fig)
-
-		else:
-			plt.show()
-
-	fig_scaled = recon_examples["scaled"]
-	fig_unscaled = recon_examples["unscaled"]
+	all_rel_losses = np.array([o["rel_loss"] for o in outputs])
 
 	loss_stats = {
 		"scaled": {
@@ -309,12 +241,157 @@ def plot_examples(loader, model, test_params, test=False):
 			"p95":    float(np.percentile(all_losses_unscaled, 95)),
 			"max":    float(np.max(all_losses_unscaled)),
 		},
+		"rel": {
+			"mean":   float(np.mean(all_rel_losses)),
+			"median": float(np.median(all_rel_losses)),
+			"std":    float(np.std(all_rel_losses)),
+			"p95":    float(np.percentile(all_rel_losses, 95)),
+			"max":    float(np.max(all_rel_losses)),
+		},
 	} 
+	
+	stats_type = "best" if best else "final"
+	path_name = path.Path(test_name, f"{test_name}_{stats_type}_model_stats.json")
 
-	return fig_scaled, fig_unscaled, loss_stats
+	with open(path_name, "w") as p:
+		json.dump(loss_stats, p, indent=4)	
 
 
-def save_test_params(test_dict, test_name, test=False):
+	return loss_stats
+# def plot_examples(loader, model, test_params, test=False):
+
+# 	device = next(model.parameters()).device
+
+# 	l = loader.dataset.l
+# 	train_mean = loader.dataset.mean
+# 	train_std = loader.dataset.std
+# 	normalize = model.normalize
+# 	flux_type = model.flux_type
+
+# 	# temp loader of training data to have *no shuffling* in order to get matching pairs
+# 	temp_loader = torch.utils.data.DataLoader(loader.dataset, batch_size=loader.batch_size, shuffle=False)
+
+# 	# get all losses and store (negligible memory usage)	
+# 	outputs = []
+# 	model.eval()
+# 	with torch.no_grad():
+# 		for x, x_mask in temp_loader:
+# 			# z score standardize if normalize is True
+# 			x_unscaled = x * x_mask # store unstandardized x (still log/cont/mean scaled!!)
+# 			x = ((x - train_mean) / train_std) * x_mask if normalize else x * x_mask
+# 			x = x.to(device)
+# 			x_mask = x_mask.to(device)
+
+# 			x_hat, _, _ = model(x)
+
+# 			losses_of_scaled = loss_calc_per_spec(x_hat, x, x_mask)
+
+# 			x_hat_unscaled = (x_hat * train_std + train_mean) if normalize else x_hat
+# 			if flux_type == "log_scale_flux":
+# 				x_hat_unscaled = torch.sign(x_hat_unscaled) * torch.expm1(torch.abs(x_hat_unscaled))
+# 				x_unscaled = torch.sign(x_unscaled.to(device)) * torch.expm1(torch.abs(x_unscaled.to(device)))
+# 			elif flux_type == "normalized_flux_cont":
+# 				pass # not added yet
+# 			elif flux_type == "normalized_flux_med":
+# 				pass # not addded yet
+# 			x_hat_unscaled = x_hat_unscaled * x_mask
+# 			x_unscaled = x_unscaled.to(device) * x_mask
+# 			x_unscaled = x_unscaled
+
+# 			losses_of_unscaled = loss_calc_per_spec(x_hat_unscaled, x_unscaled, x_mask)
+
+# 			for i in range(x.shape[0]):
+# 				outputs.append({
+# 					"mask":              x_mask[i].cpu().numpy().astype(bool),
+# 					"original_scaled":   x[i].cpu().numpy(),
+# 					"recon_scaled":      x_hat[i].cpu().numpy(),
+# 					"loss_scaled":       losses_of_scaled[i].item(),
+# 					"original_unscaled": x_unscaled[i].cpu().numpy(),
+# 					"recon_unscaled":    x_hat_unscaled[i].cpu().numpy(),
+# 					"loss_unscaled":     losses_of_unscaled[i].item(),
+# 				})
+
+# 	all_losses_unscaled = np.array([o["loss_unscaled"] for o in outputs])
+
+# 	all_losses_scaled = np.array([o["loss_scaled"] for o in outputs])
+# 	# get percentiles for examples of wht different loss scores look like
+# 	targets = {
+# 	"min":  np.min(all_losses_scaled),
+# 	"25th": np.percentile(all_losses_scaled, 25),
+# 	"mean": np.mean(all_losses_scaled),
+# 	"75th": np.percentile(all_losses_scaled, 75),
+# 	"max":  np.max(all_losses_scaled),
+# 	}
+
+# 	examples = []
+# 	for label, target in targets.items():
+# 		example = outputs[int(np.argmin(np.abs(all_losses_scaled - target)))]
+# 		example["label"] = label
+# 		examples.append(example)
+	
+# 	# plotting
+# 	recon_examples = {}
+# 	for space in ("scaled", "unscaled"):
+# 		fig, axes = plt.subplots(5, 2, figsize=(16, 20))
+# 		fig.suptitle(
+# 			f"{space.upper()} — latent: {test_params['latent_size']}, "
+# 			f"{test_params['activation_function']}, epochs: {test_params['max_epochs']}"
+# 		)
+# 		for ax_row, ex in zip(axes, examples):
+# 			ax_fit, ax_res = ax_row
+# 			og    = ex[f"original_{space}"].copy()
+# 			recon = ex[f"recon_{space}"].copy()
+# 			mask  = ex["mask"]
+# 			og[~mask]    = np.nan
+# 			recon[~mask] = np.nan
+# 			resid = og - recon
+
+# 			ax_fit.step(l, og,    color="black", lw=1.5, alpha=0.7, where="mid", label="Original")
+# 			ax_fit.step(l, recon, color="red",   lw=1.0,             where="mid", label="Reconstructed")
+# 			ax_fit.set_title(f"{ex['label']}, loss: {ex[f'loss_{space}']:.5f}")
+# 			ax_fit.legend(fontsize=8)
+# 			ax_res.scatter(l, resid, color="gray", s=2)
+# 			ax_res.axhline(0, color="black", lw=0.8, ls=":")
+# 			ax_res.set_ylabel("Residual")
+
+# 		plt.tight_layout()
+
+# 		recon_examples[space] = fig
+
+# 		if not test:
+# 			# note: only saves unscaled
+# 			pth = path.Path(test_params["test_name"], f"{test_params['test_name']}_{space}.png")
+# 			plt.savefig(pth)
+# 			plt.close(fig)
+
+# 		else:
+# 			plt.show()
+
+# 	fig_scaled = recon_examples["scaled"]
+# 	fig_unscaled = recon_examples["unscaled"]
+
+# 	loss_stats = {
+# 		"scaled": {
+# 			"mean":   float(np.mean(all_losses_scaled)),
+# 			"median": float(np.median(all_losses_scaled)),
+# 			"std":    float(np.std(all_losses_scaled)),
+# 			"p95":    float(np.percentile(all_losses_scaled, 95)),
+# 			"max":    float(np.max(all_losses_scaled)),
+# 		},
+# 		"unscaled": {
+# 			"mean":   float(np.mean(all_losses_unscaled)),
+# 			"median": float(np.median(all_losses_unscaled)),
+# 			"std":    float(np.std(all_losses_unscaled)),
+# 			"p95":    float(np.percentile(all_losses_unscaled, 95)),
+# 			"max":    float(np.max(all_losses_unscaled)),
+# 		},
+# 	} 
+
+# 	return fig_scaled, fig_unscaled, loss_stats
+
+def save_test_params(test_dict, test_params, test=False):
+
+	test_name = test_params["test_name"]
 
 	if test:
 		return
@@ -327,14 +404,12 @@ def save_test_params(test_dict, test_name, test=False):
 	with open(path_name, "w") as p:
 		json.dump(test_dict, p, indent=4)
 
-
 def make_test_dir(test_name, test=False):
 
 	if test:
 		return
 
 	path.Path(test_name).mkdir(parents=False, exist_ok=False)
-
 
 def global_stats(loader):
 
@@ -346,3 +421,44 @@ def global_stats(loader):
 	combined_fluxes = torch.cat(all_fluxes)
 
 	return combined_fluxes.mean(), combined_fluxes.std()
+
+def _to_physical_space(x_scaled, train_mean, train_std, normalize, flux_type):
+
+	# Step 1: invert z-score
+	if normalize:
+		x = (x_scaled * train_std) + train_mean
+	else:
+		x = x_scaled.clone()
+
+	# Step 2: invert flux-space transform
+	if flux_type == "log_scale_flux":
+		x = torch.sign(x) * torch.expm1(torch.abs(x))
+	elif flux_type == "normalized_flux_cont":
+		pass # not added yet
+	elif flux_type == "normalized_flux_med":
+		pass # not addded yet                          # raw flux, z-score inversion is sufficient
+	else:
+		logger.warning(f"Unknown flux_type '{flux_type}' — no flux-space inversion applied")
+
+	return x
+
+def log_final_stats(losses_per_epoch):
+
+	wandb.log({
+		"final/train_loss": losses_per_epoch["train_total"][-1],
+		"final/valid_loss": losses_per_epoch["valid_total"][-1],
+		#
+		"final/best_valid_scaled": min(losses_per_epoch["valid_total"]),
+		"final/best_valid_unscaled_mse": min(losses_per_epoch["unscaled_valid_mses"]),  # target for wandb sweep
+		"final/best_valid_unscaled_rel_mse": min(losses_per_epoch["unscaled_valid_rel_mses"]),
+		#
+		"final/best_epoch_scaled": int(np.argmin(losses_per_epoch["valid_total"])),
+		"final/train_at_best_scaled": losses_per_epoch["train_total"][int(np.argmin(losses_per_epoch["valid_total"]))],
+		"final/overfit_gap_scaled": losses_per_epoch["train_total"][int(np.argmin(losses_per_epoch["valid_total"]))] - min(losses_per_epoch["valid_total"]),
+		#
+		"final/best_epoch_unscaled": int(np.argmin(losses_per_epoch["unscaled_valid_mses"])),
+		"final/train_at_best_unscaled": losses_per_epoch["train_total"][int(np.argmin(losses_per_epoch["unscaled_valid_mses"]))],
+		#			
+		"final/best_epoch_rel_unscaled": int(np.argmin(losses_per_epoch["unscaled_valid_rel_mses"])),
+		"final/train_at_best_rel_unscaled": losses_per_epoch["train_total"][int(np.argmin(losses_per_epoch["unscaled_valid_rel_mses"]))],
+	})

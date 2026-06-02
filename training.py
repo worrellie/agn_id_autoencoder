@@ -25,12 +25,12 @@ logger = logging.getLogger(__name__)
 
 class Trainer:
 	def __init__(
-		self, device, test_name, model, optimizer, early_stopping, beta, use_autocast=False, test=False
+		self, device, test_params, model, optimizer, early_stopping, beta, use_autocast=False, test=False
 	):
 
 		self.device = device
 
-		self.test_name = test_name
+		self.test_name = test_params["test_name"]
 		self.model = model
 		self.optimizer = optimizer
 		self.early_stopping = early_stopping
@@ -76,11 +76,14 @@ class Trainer:
 
 	def train_ae(self, epochs, train_loader, valid_loader=None, verbose=False):
 
+
 		train_mean = train_loader.dataset.mean
 		train_std = train_loader.dataset.std
 
 		normalize = self.model.normalize
 		flux_type = self.model.flux_type
+		print(flux_type)
+
 		self.model.mean = train_mean
 		self.model.std = train_std
 
@@ -110,6 +113,8 @@ class Trainer:
 		valid_losses = []
 		valid_mses = []
 		valid_kls = []
+		valid_mses_unscaled = []
+		valid_rel_mses_unscaled= []
 
 		print(f'norm: {normalize}')
 		print(f'clip: {clip}')
@@ -129,6 +134,8 @@ class Trainer:
 			valid_loss = 0
 			valid_mse = 0
 			valid_kl = 0
+			valid_mse_unscaled = 0
+			valid_rel_mse_unscaled = 0 
 
 			processed_samples = 0
 
@@ -278,6 +285,18 @@ class Trainer:
 							f"valid x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}"
 						)
 
+						# get unscaled x and xhat and losses
+						x_hat_unscaled = funcs._to_physical_space(x_hat, train_mean, train_std, normalize, flux_type)
+						x_unscaled = funcs._to_physical_space(x, train_mean, train_std, normalize, flux_type)
+
+						mse_unscaled, _, _ = funcs._loss_calc_batch(x_hat_unscaled, x_unscaled, x_mask, mu=None, logvar=None, beta=0.0)
+						rel_mse_unscaled = funcs._rel_mse_calc_batch(x_hat_unscaled, x_unscaled, x_mask,)
+
+						valid_mse_unscaled += mse_unscaled.item() * x.size(0)
+						valid_rel_mse_unscaled += rel_mse_unscaled.item() * x.size(0)
+						##########
+
+						# get scaled losses
 						mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
 						print(loss)
 						print(loss.data.mean())
@@ -303,12 +322,22 @@ class Trainer:
 					epoch_avg_valid_loss = valid_loss / processed_samples_valid
 					valid_losses.append(epoch_avg_valid_loss)
 
-					# log in wandb
+					unscaled_epoch_avg_valid_mse = valid_mse_unscaled / processed_samples_valid
+					valid_mses_unscaled.append(unscaled_epoch_avg_valid_mse)
+
+					unscaled_epoch_avg_valid_rel_mse = valid_rel_mse_unscaled / processed_samples_valid
+					valid_rel_mses_unscaled.append(unscaled_epoch_avg_valid_rel_mse)
+
+
+				# log in wandb for epoch
 				wandb.log({
 				    "epoch": epoch,
 					"total_loss/valid" : epoch_avg_valid_loss,
 					"metrics/valid_mse" : epoch_avg_valid_mse,
 					"metrics/valid_kl" : epoch_avg_valid_kl,
+					"metrics/valid_mse_unscaled" : unscaled_epoch_avg_valid_mse,
+					"metrics/valid_rel_mse_unscaled" : unscaled_epoch_avg_valid_rel_mse,
+
 				})
 
 				logger.info(
@@ -317,9 +346,7 @@ class Trainer:
 
 
 				if self.early_stopping is not None:
-					self.early_stopping.check_early_stop(
-						epoch_avg_valid_loss, self.model, epoch
-					)
+					self.early_stopping.check_early_stop(epoch_avg_valid_loss, self.model, epoch )
 
 					if self.early_stopping.stop_training:
 						logger.info("---------------------------------")
@@ -330,15 +357,25 @@ class Trainer:
 			# stream losses for each epoch to W and B
 
 		logger.info("training finished")
+		
 		# stream 'final' to wandb
-		wandb.log({
-			"final/train_loss": train_losses[-1],
-			"final/valid_loss": valid_losses[-1],
-			"final/best_valid": min(valid_losses),
-			"final/best_epoch": int(np.argmin(valid_losses)),
-			"final/train_at_best": train_losses[int(np.argmin(valid_losses))],
-			"final/overfit_gap": train_losses[int(np.argmin(valid_losses))] - min(valid_losses),
-		})
+		# wandb.log({
+		# 	"final/train_loss": train_losses[-1],
+		# 	"final/valid_loss": valid_losses[-1],
+		# 	"final/best_valid_scaled": min(valid_losses),
+		# 	"final/best_valid_unscaled_mse": min(valid_mses_unscaled),  # target for wandb sweep
+		# 	"final/best_valid_unscaled_rel_mse": min(valid_rel_mses_unscaled),
+		# 	#
+		# 	"final/best_epoch_scaled": int(np.argmin(valid_losses)),
+		# 	"final/train_at_best_scaled": train_losses[int(np.argmin(valid_losses))],
+		# 	"final/overfit_gap_scaled": train_losses[int(np.argmin(valid_losses))] - min(valid_losses),
+		# 	#			
+		# 	"final/best_epoch_unscaled": int(np.argmin(valid_mses_unscaled)),
+		# 	"final/train_at_best_unscaled": train_losses[int(np.argmin(valid_mses_unscaled))],
+		# 	#			
+		# 	"final/best_epoch_rel_unscaled": int(np.argmin(valid_rel_mses_unscaled)),
+		# 	"final/train_at_best_rel_unscaled": train_losses[int(np.argmin(valid_rel_mses_unscaled))],
+		# })
 
 		# when at end of training, save (if not a test)
 		if not self.test:
@@ -349,27 +386,39 @@ class Trainer:
 			save_path_model = path.Path(self.test_name, f"{self.test_name}_model.pt")
 			torch.save(self.model, save_path_model)
 
-		model_losses = {
+		# returns the mse, kl and total_loss of  each epoch for training data
+		# and for valiadation returns scaled mse, kl, and total loss as well as
+		# mse of unscaled data and relative mse of unscaled data
+		model_losses_per_epoch = {
 			"beta": self.beta,
+			#
 			"train_total": train_losses,
 			"train_mse": train_mses,
 			"train_kl_raw": train_kls,
+			#
 			"valid_total": valid_losses,
 			"valid_mse": valid_mses,
 			"valid_kl_raw": valid_kls,
+			#
+			"unscaled_valid_mses" : valid_mses_unscaled,
+			"unscaled_valid_rel_mses" : valid_rel_mses_unscaled,
+
 		}
 
 		# save model losses: (if not testing)
 		if not self.test:
 			loss_pth = path.Path(self.test_name, f"{self.test_name}_losses.json")
 			with open(loss_pth, "w") as p:
-				json.dump(model_losses, p)
+				json.dump(model_losses_per_epoch, p)
 
-		return self.model, model_losses
+		# wandb summary for sweep
+		
+
+		return self.model, model_losses_per_epoch
 
 
 class CustomEarlyStopping:
-	def __init__(self, test_name, patience=5, delta=0, test=False, verbose=False):
+	def __init__(self, test_params, patience=5, delta=0, test=False, verbose=False):
 
 		self.patience = patience
 		self.delta = delta
@@ -378,7 +427,7 @@ class CustomEarlyStopping:
 		self.no_improve_count = 0
 		self.stop_training = False
 		self.test = test
-		self.test_name = test_name
+		self.test_name = test_params["test_name"]
 
 	def save_model(self, model, test_name, epoch):
 

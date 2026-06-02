@@ -15,6 +15,7 @@ dependencies = ["numpy",
                 "scikit-learn",
                 "h5py",
 				"wandb",
+				"torchtext",
                 ]
 
 [[tool.uv.index]]

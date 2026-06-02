@@ -23,13 +23,14 @@ import time
 import wandb
 
 import logging
+import plotting
 
 logger = logging.getLogger(__name__)
 
 
 def main():
 
-	wandb.login(key="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")
+	wandb.login()
 
 	###############
 	###############
@@ -59,7 +60,7 @@ def main():
 
 	parser.add_argument("-f", "--filename", default="all_spectra.h5")
 	parser.add_argument("-p", "--project_name", default="unspecified_project")
-	parser.add_argument("-ft", "--flux_type", default="normalized_flux_cont")
+	parser.add_argument("-ft", "--flux_type", default="log_scale_flux")
 
 	# note this is for standardizing before training
 	parser.add_argument( "-n", "--normalize", action="store_true" )  # if -n is parsed, True is returned
@@ -104,22 +105,10 @@ def main():
 		dest="architecture",
 		action="store_const",
 		const=[
-			{
-				"in": 700,
-				"out": 512,
-			},
-			{
-				"in": 512,
-				"out": 256,
-			},
-			{
-				"in": 256,
-				"out": 128,
-			},
-			{
-				"in": 128,
-				"out": 64,
-			},
+			{"in": 700,"out": 512,},
+			{"in": 512, "out": 256,},
+			{"in": 256, "out": 128,},
+			{"in": 128, "out": 64,},
 		],
 	)
 
@@ -221,8 +210,6 @@ def main():
 
 	DATA = args.filename
 
-
-
 	# default is normalised data
 	train = H5SpecDataset(DATA, split="train", flux_type=flux_type)
 	valid = H5SpecDataset(DATA, split="validation", flux_type=flux_type)
@@ -240,6 +227,10 @@ def main():
 		batch_size=batch_size_valid,
 		shuffle=False,
 	)
+
+	# wavelength grid
+
+	l = train_loader.dataset.l
 
 	#################################################################################################
 
@@ -264,7 +255,7 @@ def main():
 
 	logging.info(test_params)
 
-	funcs.save_test_params(test_params, TEST_NAME, test=TESTING)
+	funcs.save_test_params(test_params, test_params, test=TESTING)
 
 	model = None
 	if args.model_type == "StandardAutoencoder":
@@ -286,7 +277,7 @@ def main():
 		project = args.project_name,
 		# hyperparams and metadata
 		config = test_params,
-		name = TEST_NAME
+		name = test_params["test_name"]
 	)
 	wandb.config.update({
 		"architecture" : CONFIG,
@@ -306,7 +297,7 @@ def main():
 
 	if EARLY_STOPPING:
 		early_stopping = training.CustomEarlyStopping(
-			TEST_NAME, patience=10, delta=0.0, test=TESTING, verbose=verb
+			test_params, patience=10, delta=0.0, test=TESTING, verbose=verb
 		)
 	else:
 		early_stopping = None
@@ -317,44 +308,77 @@ def main():
 
 	# train
 	torch.cuda.empty_cache()
-	# model, model_losses = funcs.train_ae(EPOCHS, train_loader, valid_loader, model, optimizer, early_stopping = early_stopping, beta=BETA, verbose = verb, )
 	start = time.time()
 	trainer = training.Trainer(
-		device, TEST_NAME, model, optimizer, early_stopping, BETA, test=TESTING
+		device, test_params, model, optimizer, early_stopping, BETA, test=TESTING
 	)
-	model, model_losses = trainer.train_ae(
-		EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb,
-	)
+	model, losses_per_epoch = trainer.train_ae(EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb,)
 	stop = time.time()
+	#
 
+	# log time to train model
 	wandb.log({"train_time" : stop - start})
-
 	logger.info(f"{stop - start} seconds to train")
 
-	funcs.plot_loss(model_losses, test_params["test_name"], test=TESTING)
-	funcs.plot_dists(model_losses, test_params["test_name"], test=TESTING)
+	# log final train and valid stats
+	funcs.log_final_stats(losses_per_epoch)
 
-	train_fig_scaled, train_fig_unscaled, _ = funcs.plot_examples(train_loader, model, test_params, test=TESTING)
-	wandb.log({"references/train_scaled":   wandb.Image(train_fig_scaled),
-        	"references/train_unscaled": wandb.Image(train_fig_unscaled)})
+	#############################################################################################################################
+	# FINAL MODEL outputs
+
+	train_outputs = funcs.get_predictions(train_loader, model, test_params )
+	valid_outputs = funcs.get_predictions(valid_loader, model, test_params )
+
+	#############################################################################################################################
+	# plotting # FINAL MODEL
+
+	# plot train and valid loss by epoch (mse & kl and total)
+	epoch_loss = plotting.plot_loss_epoch_avg(losses_per_epoch, test_params, test=TESTING)
+	wandb.log({"metrics/loss_during_training" : wandb.Image(epoch_loss)})
+
+	# plot dists
+	distributions = plotting.plot_dists(train_outputs, valid_outputs, test_params, )
+	wandb.log({"loss_dist/loss_distributions" : wandb.Image(distributions)})
 
 	
-	valid_fig_scaled, valid_fig_unscaled, valid_losses = funcs.plot_examples(valid_loader, model, test_params, test=TESTING)
-	wandb.log({"references/valid_scaled":   wandb.Image(valid_fig_scaled),
-        	"references/valid_unscaled": wandb.Image(valid_fig_unscaled),})
+	# THIS FUNCTION ADN PROCESS NEEDS CHANGING
+	# plots of example spectra
+	train_fig_scaled, train_fig_unscaled, train_fig_rel = plotting.plot_examples(train_outputs, l, test_params, test=TESTING)
+	wandb.log({"references/train_scaled":   wandb.Image(train_fig_scaled),
+        	"references/train_unscaled": wandb.Image(train_fig_unscaled), 
+			"references/train_rel":   wandb.Image(train_fig_rel),})
 
+	valid_fig_scaled, valid_fig_unscaled, valid_fig_rel = plotting.plot_examples(valid_outputs, l, test_params, test=TESTING)
+	wandb.log({"references/valid_scaled":   wandb.Image(valid_fig_scaled),
+        	"references/valid_unscaled": wandb.Image(valid_fig_unscaled),
+			"references/valid_rel":   wandb.Image(valid_fig_rel),})
+
+	# need plot of log scale mse vs unscaled mse
+	# log wandb
+
+	#############################################################################################################################
+
+	valid_loss_stats = funcs.model_stats(valid_outputs, test_params, best = False)
+
+	# final model validation numbers
 	wandb.log({
 		# scaled space - for cross-run comparison
-		"loss_dist/valid_scaled_mean":   valid_losses["scaled"]["mean"],
-		"loss_dist/valid_scaled_median": valid_losses["scaled"]["median"],
-		"loss_dist/valid_scaled_p95":    valid_losses["scaled"]["p95"],
-		"loss_dist/valid_scaled_max":    valid_losses["scaled"]["max"],
+		"loss_dist/valid_scaled_mean":   valid_loss_stats["scaled"]["mean"],
+		"loss_dist/valid_scaled_median": valid_loss_stats["scaled"]["median"],
+		"loss_dist/valid_scaled_p95":    valid_loss_stats["scaled"]["p95"],
+		"loss_dist/valid_scaled_max":    valid_loss_stats["scaled"]["max"],
 
 		# unscaled space - physically meaningful
-		"loss_dist/valid_unscaled_mean":   valid_losses["unscaled"]["mean"],
-		"loss_dist/valid_unscaled_median": valid_losses["unscaled"]["median"],
-		"loss_dist/valid_unscaled_p95":    valid_losses["unscaled"]["p95"],
-		"loss_dist/valid_unscaled_max":    valid_losses["unscaled"]["max"],
+		"loss_dist/valid_unscaled_mean":   valid_loss_stats["unscaled"]["mean"],
+		"loss_dist/valid_unscaled_median": valid_loss_stats["unscaled"]["median"],
+		"loss_dist/valid_unscaled_p95":    valid_loss_stats["unscaled"]["p95"],
+		"loss_dist/valid_unscaled_max":    valid_loss_stats["unscaled"]["max"],
+
+		# rel space - physically meaningful
+		"loss_dist/valid_unscaled_mean":   valid_loss_stats["rel"]["mean"],
+		"loss_dist/valid_unscaled_median": valid_loss_stats["rel"]["median"],
+		"loss_dist/valid_unscaled_p95":    valid_loss_stats["rel"]["p95"],
+		"loss_dist/valid_unscaled_max":    valid_loss_stats["rel"]["max"],
 	})
 	# funcs.plot_examples(valid_loader, model, test_params, test = TESTING)
 
