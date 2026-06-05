@@ -150,14 +150,52 @@ def main():
 	flux_type = args.flux_type
 
 	#####################################################################################################
+	# Init wandb early so sweep agent can inject hyperparams into wandb.config before model is built.
+
+	run = wandb.init(
+		entity="worrellie-iastro",
+		project=args.project_name,
+		config={
+			"latent_size":   LATENT_SIZE,
+			"learn_rate":    LEARNING_RATE,
+			"weight_decay":  WEIGHT_DECAY,
+			"beta":          BETA,
+			"epochs":        EPOCHS,
+			"n_layers":      len(CONFIG),
+			"activation":    ACTIVATION_FUNCTION,
+		},
+	)
+	cfg = wandb.config
+
+	# Override with sweep-injected values (no-op for manual runs — defaults pass through unchanged).
+	LATENT_SIZE        = cfg.get("latent_size",  LATENT_SIZE)
+	LEARNING_RATE      = cfg.get("learn_rate",   LEARNING_RATE)
+	WEIGHT_DECAY       = cfg.get("weight_decay", WEIGHT_DECAY)
+	BETA               = cfg.get("beta",         BETA)
+	EPOCHS             = cfg.get("epochs",       EPOCHS)
+	ACTIVATION_FUNCTION = cfg.get("activation",  ACTIVATION_FUNCTION)
+
+	_LAYER_CONFIGS = {
+		1: [{"in": 512, "out": 256}],
+		2: [{"in": 512, "out": 256}, {"in": 256, "out": 64}],
+		3: [{"in": 512, "out": 256}, {"in": 256, "out": 128}, {"in": 128, "out": 64}],
+		4: [{"in": 700, "out": 512}, {"in": 512, "out": 256}, {"in": 256, "out": 128}, {"in": 128, "out": 64}],
+	}
+	CONFIG = _LAYER_CONFIGS.get(cfg.get("n_layers", len(CONFIG)), CONFIG)
+
+	#####################################################################################################
 
 	TEST_NAME = f"RUN_{args.model_type}_nl{len(CONFIG)}_ls{LATENT_SIZE}_e{EPOCHS}_{ACTIVATION_FUNCTION}_B{BETA:.0e}_lr{LEARNING_RATE:.0e}_wd{WEIGHT_DECAY}_es{EARLY_STOPPING}_n{normalize}"
 
-	counter = 1
-	base_name = TEST_NAME
-	while os.path.isdir(TEST_NAME):
-		TEST_NAME = f"{base_name}_{counter}"
-		counter += 1
+	# For sweep runs append the wandb run ID to guarantee directory uniqueness across parallel agents.
+	if run.sweep_id is not None:
+		TEST_NAME = f"{TEST_NAME}_{run.id}"
+	else:
+		counter = 1
+		base_name = TEST_NAME
+		while os.path.isdir(TEST_NAME):
+			TEST_NAME = f"{base_name}_{counter}"
+			counter += 1
 
 	# make test dir
 	funcs.make_test_dir(TEST_NAME, test=TESTING)
@@ -270,24 +308,19 @@ def main():
 		exit()
 
 	######################################################################################################
-	### W AND B ###
 
-	run = wandb.init(
-		entity = "worrellie-iastro",
-		project = args.project_name,
-		# hyperparams and metadata
-		config = test_params,
-		name = test_params["test_name"]
-	)
+	wandb.run.name = TEST_NAME
 	wandb.config.update({
-		"architecture" : CONFIG,
-		"n_layers" : len(CONFIG),
-		"normalize" : normalize,
-		"input_size" : INPUT_SIZE,
+		"architecture":   CONFIG,
+		"n_layers":       len(CONFIG),
+		"normalize":      normalize,
+		"input_size":     INPUT_SIZE,
 		"early_stopping": EARLY_STOPPING,
-		"n_train" : len(train),
-		"n_valid" : len(valid),
-		})
+		"n_train":        len(train),
+		"n_valid":        len(valid),
+		"filename":       DATA,
+		"flux_type":      flux_type,
+	}, allow_val_change=True)
 
 
 	######################################################################################################
@@ -473,7 +506,6 @@ def main():
 			plt.close(latent_fig)
 
 	funcs.log_summary(train_outputs, valid_outputs, test_params, test=False)
-
 
 if __name__ == "__main__":
 	main()
