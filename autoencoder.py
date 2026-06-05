@@ -66,6 +66,8 @@ class StandardAutoencoder(nn.Module):
 
 	def forward(self, x):
 
+		# a forward pass
+
 		x = self.act_func(self.input_to_encoder(x))
 
 		for l in self.encoder_layers:
@@ -82,6 +84,14 @@ class StandardAutoencoder(nn.Module):
 
 		return x_hat, None, None
 
+	def encode(self, x):
+		
+		x = self.act_func(self.input_to_encoder(x))
+
+		for l in self.encoder_layers:
+			x = self.act_func(l(x))
+
+		return self.encoder_to_latent(x)
 
 class VAEAutoencoder(nn.Module):
 	def __init__(self, config, input_size, latent_size, flux_type, normalize, activation="ReLU"):
@@ -138,6 +148,12 @@ class VAEAutoencoder(nn.Module):
 		self.decoder_from_latent = nn.Linear(latent_size, config[-1]["out"])
 
 		self.decoder_to_output = nn.Linear(config[0]["in"], input_size)
+
+	# def encode(self, x):
+	# 	x = self.act_func(self.input_to_encoder(x))
+	# 	for l in self.encoder_layers:
+	# 		x = self.act_func(l(x))
+	# 	return self.encoder_to_latent_mean(x)
 
 	def forward(self, x):
 

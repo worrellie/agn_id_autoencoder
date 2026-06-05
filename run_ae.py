@@ -330,37 +330,93 @@ def main():
 	valid_outputs = funcs.get_predictions(valid_loader, model, test_params )
 
 	#############################################################################################################################
-	# plotting # FINAL MODEL
+	# BEST MODEL outputs
+
+	train_outputs_best = funcs.get_predictions(train_loader, best_model, test_params )
+	valid_outputs_best = funcs.get_predictions(valid_loader, best_model, test_params )
+
+	# #############################################################################################################################
+	# # plotting # FINAL MODEL
+
+	# # plot train and valid loss by epoch (mse & kl and total)
+	# epoch_loss = plotting.plot_loss_epoch_avg(losses_per_epoch, test_params, test=TESTING)
+	# wandb.log({"metrics/loss_during_training" : wandb.Image(epoch_loss)})
+
+	# # plot dists
+	# distributions = plotting.plot_dists(train_outputs, valid_outputs, test_params, )
+	# wandb.log({"loss_dist/loss_distributions" : wandb.Image(distributions)})
+
+	# # plots of example spectra
+	# train_fig_scaled, train_fig_unscaled, train_fig_rel = plotting.plot_examples(train_outputs, l, test_params, test=TESTING)
+	# wandb.log({"references/train_scaled":   wandb.Image(train_fig_scaled),
+    #     	"references/train_unscaled": wandb.Image(train_fig_unscaled), 
+	# 		"references/train_rel":   wandb.Image(train_fig_rel),})
+
+	# valid_fig_scaled, valid_fig_unscaled, valid_fig_rel = plotting.plot_examples(valid_outputs, l, test_params, test=TESTING)
+	# wandb.log({"references/valid_scaled":   wandb.Image(valid_fig_scaled),
+    #     	"references/valid_unscaled": wandb.Image(valid_fig_unscaled),
+	# 		"references/valid_rel":   wandb.Image(valid_fig_rel),})
+
+	# # TO DO:  need plot of log scale mse vs unscaled mse
+	# # log wandb
+
+	# #############################################################################################################################
+
+	# valid_loss_stats = funcs.model_stats(valid_outputs, test_params, best = False)
+
+	# # FINAL model validation numbers
+	# wandb.log({
+	# 	# scaled space - for cross-run comparison
+	# 	"loss_dist/valid_scaled_mean":   valid_loss_stats["scaled"]["mean"],
+	# 	"loss_dist/valid_scaled_median": valid_loss_stats["scaled"]["median"],
+	# 	"loss_dist/valid_scaled_p95":    valid_loss_stats["scaled"]["p95"],
+	# 	"loss_dist/valid_scaled_max":    valid_loss_stats["scaled"]["max"],
+
+	# 	# unscaled space - physically meaningful
+	# 	"loss_dist/valid_unscaled_mean":   valid_loss_stats["unscaled"]["mean"],
+	# 	"loss_dist/valid_unscaled_median": valid_loss_stats["unscaled"]["median"],
+	# 	"loss_dist/valid_unscaled_p95":    valid_loss_stats["unscaled"]["p95"],
+	# 	"loss_dist/valid_unscaled_max":    valid_loss_stats["unscaled"]["max"],
+
+	# 	# rel space - physically meaningful
+	# 	"loss_dist/valid_unscaled_mean":   valid_loss_stats["rel"]["mean"],
+	# 	"loss_dist/valid_unscaled_median": valid_loss_stats["rel"]["median"],
+	# 	"loss_dist/valid_unscaled_p95":    valid_loss_stats["rel"]["p95"],
+	# 	"loss_dist/valid_unscaled_max":    valid_loss_stats["rel"]["max"],
+	# })
+
+	#############################################################################################################################
+	# plotting # BEST MODEL
 
 	# plot train and valid loss by epoch (mse & kl and total)
 	epoch_loss = plotting.plot_loss_epoch_avg(losses_per_epoch, test_params, test=TESTING)
 	wandb.log({"metrics/loss_during_training" : wandb.Image(epoch_loss)})
 
 	# plot dists
-	distributions = plotting.plot_dists(train_outputs, valid_outputs, test_params, )
+	distributions = plotting.plot_dists(train_outputs_best, valid_outputs_best, test_params, )
 	wandb.log({"loss_dist/loss_distributions" : wandb.Image(distributions)})
 
-	
-	# THIS FUNCTION ADN PROCESS NEEDS CHANGING
 	# plots of example spectra
-	train_fig_scaled, train_fig_unscaled, train_fig_rel = plotting.plot_examples(train_outputs, l, test_params, test=TESTING)
+	train_fig_scaled, train_fig_unscaled, train_fig_rel = plotting.plot_examples(train_outputs_best, l, test_params, test=TESTING)
 	wandb.log({"references/train_scaled":   wandb.Image(train_fig_scaled),
-        	"references/train_unscaled": wandb.Image(train_fig_unscaled), 
+			"references/train_unscaled": wandb.Image(train_fig_unscaled), 
 			"references/train_rel":   wandb.Image(train_fig_rel),})
 
-	valid_fig_scaled, valid_fig_unscaled, valid_fig_rel = plotting.plot_examples(valid_outputs, l, test_params, test=TESTING)
+	valid_fig_scaled, valid_fig_unscaled, valid_fig_rel = plotting.plot_examples(valid_outputs_best, l, test_params, test=TESTING)
 	wandb.log({"references/valid_scaled":   wandb.Image(valid_fig_scaled),
-        	"references/valid_unscaled": wandb.Image(valid_fig_unscaled),
+			"references/valid_unscaled": wandb.Image(valid_fig_unscaled),
 			"references/valid_rel":   wandb.Image(valid_fig_rel),})
 
-	# need plot of log scale mse vs unscaled mse
+	# TO DO:  need plot of log scale mse vs unscaled mse
+	log_vs_rel = plotting.plot_log_vs_rel_mse(losses_per_epoch, test_params, test=TESTING)
 	# log wandb
 
 	#############################################################################################################################
 
-	valid_loss_stats = funcs.model_stats(valid_outputs, test_params, best = False)
+	valid_loss_stats = funcs.model_stats(valid_outputs_best, test_params, best = True)
+	train_loss_stats = funcs.model_stats(train_outputs_best, test_params, best = True)
 
-	# final model validation numbers
+	# BEST model validation numbers
 	wandb.log({
 		# scaled space - for cross-run comparison
 		"loss_dist/valid_scaled_mean":   valid_loss_stats["scaled"]["mean"],
@@ -379,8 +435,35 @@ def main():
 		"loss_dist/valid_unscaled_median": valid_loss_stats["rel"]["median"],
 		"loss_dist/valid_unscaled_p95":    valid_loss_stats["rel"]["p95"],
 		"loss_dist/valid_unscaled_max":    valid_loss_stats["rel"]["max"],
+
+		"loss_dist/train_rel_mean":   train_loss_stats["rel"]["mean"],
+		"loss_dist/train_rel_median": train_loss_stats["rel"]["median"],
+		"loss_dist/train_rel_p95":    train_loss_stats["rel"]["p95"],
+
 	})
-	# funcs.plot_examples(valid_loader, model, test_params, test = TESTING)
+
+	# valid_latent_data = funcs.get_latent_space(valid_loader, best_model, test_params, test=TESTING)
+	latent_data = funcs.get_latent_space(train_loader, best_model, test_params, test=TESTING)
+
+	color_params = [
+		("rel_loss",    "Relative loss"),
+		("loss_scaled", "Scaled loss"),
+		("redshift",    "Redshift"),
+		("snr",         "SNR"),
+	]
+
+	reduce_method = "both"
+
+	for key, label in color_params:
+		if latent_data.get(key) is not None:
+			latent_fig = plotting.plot_latent_space(
+				latent_data, color_by=key, color_label=label,
+				method=reduce_method, test_params=test_params, test=TESTING,
+			)
+			wandb.log({f"latent/{reduce_method}_{key}": wandb.Image(latent_fig)})
+			plt.close(latent_fig)
+
+	funcs.log_summary(train_outputs, valid_outputs, test_params, test=False)
 
 
 if __name__ == "__main__":

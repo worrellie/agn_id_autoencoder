@@ -369,9 +369,6 @@ class Trainer:
 					path_best_model = path.Path(self.test_name, f"{self.test_name}_best_model.pt")
 					self.checkpoint(self.model, path_best_model)
 
-			
-			# stream losses for each epoch to W and B
-
 		logger.info("training finished")
 		
 		# when at end of training, save (if not a test)

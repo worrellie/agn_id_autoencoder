@@ -16,6 +16,7 @@ dependencies = ["numpy",
                 "h5py",
 				"wandb",
 				"torchtext",
+				"umap-learn",
                 ]
 
 [[tool.uv.index]]

@@ -28,7 +28,6 @@ logger = logging.getLogger(__name__)
 
 device = torch.device("cuda:0" if torch.cuda.is_available() else "cpu")
 
-
 def get_model_size_mb(model):
 	# Calculate parameters (weights that are trained)
 	param_size = 0
@@ -164,6 +163,9 @@ def get_predictions(loader, model, test_params, test = False):
 
 	# temp loader of training data to have *no shuffling* in order to get matching pairs
 	temp_loader = torch.utils.data.DataLoader(loader.dataset, batch_size=loader.batch_size, shuffle=False)
+	## ok so im not sure shuffle true would be an issue in this use?? check...
+	## because even with batching it only shuffles at the after going through *all* the samples...
+	# so there wouldnt be an issue and it would be faster if batched....
 
 	# get all losses and store (negligible memory usage)	
 	outputs = []
@@ -332,3 +334,91 @@ def log_final_stats(losses_per_epoch):
 		"final/best_epoch_rel_unscaled": int(np.argmin(losses_per_epoch["unscaled_valid_rel_mses"])),
 		"final/train_at_best_rel_unscaled": losses_per_epoch["train_total"][int(np.argmin(losses_per_epoch["unscaled_valid_rel_mses"]))],
 	})
+
+def log_summary(train_outputs, valid_outputs, test_params, test = False):
+
+	test_name = test_params["test_name"]
+
+	# all_losses_scaled = np.array([o["loss_scaled"] for o in outputs])
+
+	train_all_losses_unscaled = np.array([o["loss_unscaled"] for o in train_outputs])
+	train_all_losses_scaled = np.array([o["loss_scaled"] for o in train_outputs])
+	train_all_rel_losses = np.array([o["rel_loss"] for o in train_outputs])
+
+	valid_all_losses_unscaled = np.array([o["loss_unscaled"] for o in valid_outputs])
+	valid_all_losses_scaled = np.array([o["loss_scaled"] for o in valid_outputs])
+	valid_all_rel_losses = np.array([o["rel_loss"] for o in valid_outputs])
+
+	wandb.run.summary["mean_unscaled_mse"] = np.mean(valid_all_losses_unscaled)
+	wandb.run.summary["mean_rel_mse"] = np.mean(valid_all_rel_losses)
+	wandb.run.summary["mean_overfit"] = np.mean(train_all_rel_losses) - np.mean(valid_all_rel_losses)
+
+def get_latent_space(loader, model, test_params, test=False):
+
+	test_name = test_params["test_name"]
+
+	device = next(model.parameters()).device
+	d_split = loader.dataset.split
+
+	train_mean = loader.dataset.mean
+	train_std = loader.dataset.std
+	normalize = model.normalize
+	flux_type = model.flux_type
+
+	temp_loader = torch.utils.data.DataLoader(loader.dataset, batch_size=loader.batch_size, shuffle=False)
+
+	all_latent = []
+	all_loss_scaled = []
+	all_loss_unscaled = []
+	all_rel_loss = []
+
+	model.eval()
+	with torch.no_grad():
+		for x, x_mask in temp_loader:
+			x_unscaled = x * x_mask
+			x = ((x - train_mean) / train_std) * x_mask if normalize else x * x_mask
+			x = x.to(device)
+			x_mask = x_mask.to(device)
+
+			z = model.encode(x)
+			all_latent.append(z.cpu().numpy())
+
+			x_hat, _, _ = model(x)
+
+			all_loss_scaled.append(loss_calc_per_spec(x_hat, x, x_mask).cpu().numpy())
+
+			x_hat_unscaled = (x_hat * train_std + train_mean) if normalize else x_hat
+			if flux_type == "log_scale_flux":
+				x_hat_unscaled = torch.sign(x_hat_unscaled) * torch.expm1(torch.abs(x_hat_unscaled))
+				x_unscaled = torch.sign(x_unscaled.to(device)) * torch.expm1(torch.abs(x_unscaled.to(device)))
+			x_hat_unscaled = x_hat_unscaled * x_mask
+			x_unscaled = x_unscaled.to(device) * x_mask
+
+			all_loss_unscaled.append(loss_calc_per_spec(x_hat_unscaled, x_unscaled, x_mask).cpu().numpy())
+			all_rel_loss.append(rel_loss_calc_per_spec(x_hat_unscaled, x_unscaled, x_mask).cpu().numpy())
+
+	latent = np.concatenate(all_latent, axis=0)
+	loss_scaled = np.concatenate(all_loss_scaled)
+	loss_unscaled = np.concatenate(all_loss_unscaled)
+	rel_loss = np.concatenate(all_rel_loss)
+
+	redshift = temp_loader.dataset._get_redshift()
+	snr = temp_loader.dataset._get_snr()
+
+	latent_data = {
+		"latent":        latent,
+		"loss_scaled":   loss_scaled,
+		"loss_unscaled": loss_unscaled,
+		"rel_loss":      rel_loss,
+		"redshift":      redshift,
+		"snr":           snr,
+	}
+
+	if not test:
+		save_arrays = {k: v for k, v in latent_data.items() if v is not None}
+		pth = path.Path(test_name, f"{test_name}_{d_split}_latent.npz")
+		np.savez(pth, **save_arrays)
+
+	return latent_data
+
+	

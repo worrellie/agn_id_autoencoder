@@ -51,6 +51,9 @@ class H5SpecDataset(torch.utils.data.Dataset):
 
 		self.hf = None
 
+		self.redshifts = None
+		self.snr = None
+
 	def __len__(self):
 
 		return self.len
@@ -70,6 +73,31 @@ class H5SpecDataset(torch.utils.data.Dataset):
 		sample_mask = sample_mask.bool()
 
 		return sample, sample_mask
+
+	def _get_redshift(self):
+		# CAUTION: only use with a non-shuffled loader
+		if self.redshifts is None:
+			if self.hf is None:
+				self.hf = h5py.File(self.data_path, "r")
+			try:
+				self.redshifts = np.array(self.hf[self.split]["redshift"])
+			except KeyError:
+				return None
+		return self.redshifts
+
+	def _get_snr(self):
+		# CAUTION: only use with a non-shuffled loader
+		if self.snr is None:
+			if self.hf is None:
+				self.hf = h5py.File(self.data_path, "r")
+			try:
+				self.snr = np.array(self.hf[self.split]["SNR"])
+			except KeyError:
+				return None
+		return self.snr
+
+
+
 
 
 class SpecDataset(torch.utils.data.Dataset):
