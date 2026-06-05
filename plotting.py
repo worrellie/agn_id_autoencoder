@@ -89,10 +89,6 @@ def plot_loss_epoch_avg(model_losses, test_params, test=False):
 
 	# plot rel mse in unscaled space to see if model converges in metric of interest
 	rel_mse = model_losses["unscaled_valid_rel_mses"]
-	print(rel_mse)
-	print(train_mse)
-	print(valid_mse)
-	exit()
 	ax3.plot(epochs, rel_mse, label="Valid Rel MSE (unscaled)", color="tab:green")
 	best_epoch = int(np.argmin(rel_mse))
 	ax3.axvline(best_epoch, color="tab:green", linestyle="--", alpha=0.6,

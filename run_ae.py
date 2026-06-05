@@ -442,8 +442,8 @@ def main():
 
 	})
 
-	# valid_latent_data = funcs.get_latent_space(valid_loader, best_model, test_params, test=TESTING)
-	latent_data = funcs.get_latent_space(train_loader, best_model, test_params, test=TESTING)
+	valid_latent_data = funcs.get_latent_space(valid_loader, best_model, test_params, test=TESTING)
+	train_latent_data = funcs.get_latent_space(train_loader, best_model, test_params, test=TESTING)
 
 	color_params = [
 		("rel_loss",    "Relative loss"),
@@ -455,12 +455,21 @@ def main():
 	reduce_method = "both"
 
 	for key, label in color_params:
-		if latent_data.get(key) is not None:
+		if valid_latent_data.get(key) is not None:
 			latent_fig = plotting.plot_latent_space(
-				latent_data, color_by=key, color_label=label,
+				valid_latent_data, color_by=key, color_label=label,
 				method=reduce_method, test_params=test_params, test=TESTING,
 			)
-			wandb.log({f"latent/{reduce_method}_{key}": wandb.Image(latent_fig)})
+			wandb.log({f"latent/valid_{reduce_method}_{key}": wandb.Image(latent_fig)})
+			plt.close(latent_fig)
+
+	for key, label in color_params:
+		if train_latent_data.get(key) is not None:
+			latent_fig = plotting.plot_latent_space(
+				train_latent_data, color_by=key, color_label=label,
+				method=reduce_method, test_params=test_params, test=TESTING,
+			)
+			wandb.log({f"latent/train_{reduce_method}_{key}": wandb.Image(latent_fig)})
 			plt.close(latent_fig)
 
 	funcs.log_summary(train_outputs, valid_outputs, test_params, test=False)
