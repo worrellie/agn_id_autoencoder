@@ -150,7 +150,6 @@ def main():
 	flux_type = args.flux_type
 
 	#####################################################################################################
-	# Init wandb early so sweep agent can inject hyperparams into wandb.config before model is built.
 
 	run = wandb.init(
 		entity="worrellie-iastro",

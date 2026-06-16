@@ -1,0 +1,43 @@
+program: run_ae.py
+method: bayes
+metric:
+  name: final/best_valid_unscaled_rel_mse
+  goal: minimize
+
+# Fixed params passed as CLI args (not swept).
+# Adjust these for your data and cluster setup.
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -f
+  - all_spectra.h5
+  - -p
+  - autoencoder_sweep
+  - -e
+  - "50"
+  - -s          # enable early stopping
+
+parameters:
+  latent_size:
+    values: [8, 16, 32, 64, 128]
+
+  learn_rate:
+    distribution: log_uniform_values
+    min: 1.0e-6
+    max: 1.0e-3
+
+  weight_decay:
+    distribution: log_uniform_values
+    min: 1.0e-10
+    max: 1.0e-4
+
+  n_layers:
+    values: [1, 2, 3]
+
+  activation:
+    values: [ReLU, Tanh, LeakyReLU]
+
+  # beta: only relevant for VAE runs; set to 0 for SAE.
+  beta:
+    values: [0.0]
