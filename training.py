@@ -420,14 +420,9 @@ class Trainer:
 
 	def resume(self, model, filename):
 
-		# does not account for optmizer yet
-
+		# optimizer state is saved but not yet restored
 		save_dict = torch.load(filename)
-
-		if 'optimizer' in save_dict.keys():
-			pass
-		else:
-			model.load_state_dict(save_dict['model'])
+		model.load_state_dict(save_dict['model'])
 
 
 class CustomEarlyStopping:
