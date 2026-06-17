@@ -20,7 +20,7 @@ test_all_spectra_sf_q.h5
 all_spectra_to_process_sf.h5
 all_spectra_to_process_q.h5
 
-tests*/
+tests_*/
 all_spectra_sf_q/
 bulk_tests/
 
