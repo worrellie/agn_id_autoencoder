@@ -351,8 +351,8 @@ class Trainer:
 					f"valid: epoch {epoch + 1}/{epochs},\ntotal loss: {epoch_avg_valid_loss:.10f},\nmse: {epoch_avg_valid_mse:.10f},\nkl: {epoch_avg_valid_kl:e}"
 				)
 
-				# metric for best model: unscaled_epoch_avg_valid_rel_mse
-				model_success_metric = unscaled_epoch_avg_valid_rel_mse
+				# metric for best model: unscaled_epoch_avg_valid_mse (absolute unscaled MSE)
+				model_success_metric = unscaled_epoch_avg_valid_mse
 				if self.early_stopping is not None:
 					self.early_stopping.check_early_stop(model_success_metric, self.model, epoch )
 					do_checkpoint = self.early_stopping.new_best

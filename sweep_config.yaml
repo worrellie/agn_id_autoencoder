@@ -1,7 +1,7 @@
 program: run_ae.py
 method: bayes
 metric:
-  name: final/best_valid_unscaled_rel_mse
+  name: final/best_valid_unscaled_mse
   goal: minimize
 
 # Fixed params passed as CLI args (not swept).

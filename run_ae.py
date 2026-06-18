@@ -439,9 +439,7 @@ def main():
 			"references/valid_unscaled": wandb.Image(valid_fig_unscaled),
 			"references/valid_rel":   wandb.Image(valid_fig_rel),})
 
-	# TODO:  need plot of log scale mse vs unscaled mse
-	log_vs_rel = plotting.plot_log_vs_rel_mse(losses_per_epoch, test_params, test=TESTING)
-	# log wandb
+	log_vs_unscaled = plotting.plot_log_vs_unscaled_mse(losses_per_epoch, test_params, test=TESTING)
 
 	#############################################################################################################################
 

@@ -104,7 +104,7 @@ Key arguments:
 | `--vae` | Train a VAE instead of SAE | off |
 | `-r` / `-t` / `--leaky` | Activation: ReLU / Tanh / LeakyReLU | ReLU |
 
-The best model (by unscaled relative MSE on validation) is saved to `RUN_<name>/`.
+The best model (by unscaled MSE on validation) is saved to `RUN_<name>/`.
 
 ---
 
@@ -118,7 +118,7 @@ wandb sweep sweep_config.yaml
 wandb agent worrellie-iastro/autoencoder_sweep/<SWEEP_ID>
 ```
 
-`sweep_config.yaml` runs Bayesian optimisation over latent size, learning rate, weight decay, number of layers, and activation function. The sweep metric is `final/best_valid_unscaled_rel_mse` (lower is better).
+`sweep_config.yaml` runs Bayesian optimisation over latent size, learning rate, weight decay, number of layers, and activation function. The sweep metric is `final/best_valid_unscaled_mse` (lower is better).
 
 ---
 

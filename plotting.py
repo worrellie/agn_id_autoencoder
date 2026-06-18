@@ -89,15 +89,15 @@ def plot_loss_epoch_avg(model_losses, test_params, test=False):
 	ax2.set_ylabel("MSE Loss", color="tab:blue")
 	ax2.tick_params(axis="y", labelcolor="tab:blue")
 
-	# plot rel mse in unscaled space to see if model converges in metric of interest
-	rel_mse = model_losses["unscaled_valid_rel_mses"]
-	ax3.plot(epochs, rel_mse, label="Valid Rel MSE (unscaled)", color="tab:green")
-	best_epoch = int(np.argmin(rel_mse))
+	# plot unscaled mse in physical space to see if model converges in metric of interest
+	unscaled_mse = model_losses["unscaled_valid_mses"]
+	ax3.plot(epochs, unscaled_mse, label="Valid MSE (unscaled)", color="tab:green")
+	best_epoch = int(np.argmin(unscaled_mse))
 	ax3.axvline(best_epoch, color="tab:green", linestyle="--", alpha=0.6,
 				label=f"Best epoch ({best_epoch})")
-	ax3.set_title("Relative MSE — Physical Space (Sweep Target)")
+	ax3.set_title("Unscaled MSE — Physical Space (Sweep Target)")
 	ax3.set_xlabel("Epochs")
-	ax3.set_ylabel("Rel MSE")
+	ax3.set_ylabel("Unscaled MSE")
 	ax3.legend()
 
 	plt.tight_layout()
@@ -258,16 +258,16 @@ def plot_examples(outputs, l, test_params, test=False):
 
 	return scaled_fig, unscaled_fig, rel_fig
 
-def plot_log_vs_rel_mse(model_losses, test_params, test=False):
+def plot_log_vs_unscaled_mse(model_losses, test_params, test=False):
 
 	test_name  = test_params["test_name"]
 	# epochs     = range(1, len(model_losses["valid_mse"]) + 1)
 	epochs     = range(0, len(model_losses["valid_mse"]))
 	log_mse    = model_losses["valid_mse"]
-	rel_mse    = model_losses["unscaled_valid_rel_mses"]
+	unscaled_mse = model_losses["unscaled_valid_mses"]
 
 	fig, ax1 = plt.subplots(figsize=(10, 4))
-	c_log, c_rel = "tab:orange", "tab:green"
+	c_log, c_unscaled = "tab:orange", "tab:green"
 
 	ax1.plot(epochs, log_mse, color=c_log, label="Scaled MSE")
 	ax1.set_xlabel("Epoch")
@@ -275,25 +275,25 @@ def plot_log_vs_rel_mse(model_losses, test_params, test=False):
 	ax1.tick_params(axis="y", labelcolor=c_log)
 
 	ax2 = ax1.twinx()
-	ax2.plot(epochs, rel_mse, color=c_rel, label="Rel MSE (unscaled)")
-	ax2.set_ylabel("Rel MSE (unscaled)", color=c_rel)
-	ax2.tick_params(axis="y", labelcolor=c_rel)
+	ax2.plot(epochs, unscaled_mse, color=c_unscaled, label="MSE (unscaled)")
+	ax2.set_ylabel("MSE (unscaled)", color=c_unscaled)
+	ax2.tick_params(axis="y", labelcolor=c_unscaled)
 
 	best_log = int(np.argmin(log_mse))
-	best_rel = int(np.argmin(rel_mse))
+	best_unscaled = int(np.argmin(unscaled_mse))
 	ax1.axvline(best_log, color=c_log, linestyle="--", alpha=0.5, label=f"Best scaled (ep {best_log})")
-	ax2.axvline(best_rel, color=c_rel, linestyle="--", alpha=0.5, label=f"Best rel (ep {best_rel})")
+	ax2.axvline(best_unscaled, color=c_unscaled, linestyle="--", alpha=0.5, label=f"Best unscaled (ep {best_unscaled})")
 
 	lines1, labels1 = ax1.get_legend_handles_labels()
 	lines2, labels2 = ax2.get_legend_handles_labels()
 	ax1.legend(lines1 + lines2, labels1 + labels2, fontsize=8)
-	plt.title("Scaled MSE vs Physical Rel MSE per Epoch")
+	plt.title("Scaled MSE vs Physical Unscaled MSE per Epoch")
 	plt.tight_layout()
 
 	if not test:
-		pth_fig = path.Path(test_name, f"{test_name}_log_vs_rel_mse.png")
+		pth_fig = path.Path(test_name, f"{test_name}_log_vs_unscaled_mse.png")
 		fig.savefig(pth_fig)
-		wandb.log({"metrics/log_vs_rel_mse": wandb.Image(fig)})
+		wandb.log({"metrics/log_vs_unscaled_mse": wandb.Image(fig)})
 		plt.close(fig)
 	else:
 		plt.show()
