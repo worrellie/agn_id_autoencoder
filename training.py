@@ -155,17 +155,17 @@ class Trainer:
 
 				# for understanding exploding gradient problem
 				# check min and max incoming x values
-				all_vals.append(x[x_mask])
-				if len(all_vals) > 20:
-					break
-				all_vals = torch.cat(all_vals)
-				print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
-				print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
-				print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
+				# all_vals.append(x[x_mask])
+				# if len(all_vals) > 20:
+				# 	break
+				# all_vals = torch.cat(all_vals)
+				# print(f"Raw data: min={all_vals.min():.3f}, max={all_vals.max():.3f}")
+				# print(f"          mean={all_vals.mean():.3f}, std={all_vals.std():.3f}")
+				# print(f"          >10: {(all_vals.abs() > 10).sum()}, >100: {(all_vals.abs() > 100).sum()}")
 
-				stded = (all_vals - train_mean)/ train_std
-				print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
-				print(f"                       std={stded.std():.3f}")
+				# stded = (all_vals - train_mean)/ train_std
+				# print(f"After standardising: min={stded.min():.3f}, max={stded.max():.3f}")
+				# print(f"                       std={stded.std():.3f}")
 				#############################################################################################
 
 				if normalize:

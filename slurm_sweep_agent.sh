@@ -1,34 +1,30 @@
 #!/bin/bash
-
 #SBATCH --job-name=ae_sweep
-#SBATCH --output=sweep_logs/run_%A_%a.out
-#SBATCH --error=sweep_logs/run_%A_%a.err
+#SBATCH --output=/home/vboyanov/ml_out/run_%A_%a.out
+#SBATCH --error=/home/vboyanov/ml_out/run_%A_%a.err
+#SBATCH --nodes=1
+#SBATCH --ntasks=1
 #SBATCH --time=04:00:00
 #SBATCH --mem=32G
 #SBATCH --cpus-per-task=8
-# Uncomment the line below if your cluster has GPUs:
-##SBATCH --gres=gpu:1
-# Set the partition for your cluster:
-##SBATCH --partition=short
 
-# ---- environment setup (adjust for your cluster) ----
-# module load python/3.10
-# source /path/to/venv/bin/activate
-# conda activate your_env_name
-
-# ---- run ----
+# ---- args ----
 SWEEP_PATH="$1"
-
 if [ -z "$SWEEP_PATH" ]; then
     echo "Error: no sweep path provided."
     echo "Usage: sbatch slurm_sweep_agent.sh <entity/project/sweep_id>"
     exit 1
 fi
 
-mkdir -p sweep_logs
+# ---- environment setup ----
+RUNPATH=/home/vboyanov/ml/
+cd $RUNPATH
+source $RUNPATH/bt_env/bin/activate
+export SLURM_CPUS_PER_TASK=8
 
-cd "$SLURM_SUBMIT_DIR"
+cd $RUNPATH/autoencoder/
 
+# ---- run ----
 echo "Starting wandb agent for sweep: $SWEEP_PATH"
 echo "SLURM job: $SLURM_JOB_ID  array task: $SLURM_ARRAY_TASK_ID"
 

@@ -507,5 +507,7 @@ def main():
 	# funcs.log_summary(train_outputs, valid_outputs, test_params, test=False)
 	funcs.log_summary(train_outputs_best, valid_outputs_best, test_params, test=False)
 
+	wandb.finish()
+
 if __name__ == "__main__":
 	main()

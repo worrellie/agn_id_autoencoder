@@ -1,6 +1,8 @@
 import torch
 from torch import nn, optim
 from torchvision import datasets, transforms
+import matplotlib
+matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 import pathlib as path
 from astropy.io import fits
