@@ -1,18 +1,4 @@
 #!/bin/bash
-# Submit one wandb sweep agent as a SLURM job.
-#
-# Usage:
-#   1. Create a sweep and note the sweep ID:
-#        wandb sweep sweep_config.yaml
-#      This prints: "wandb: Created sweep with ID: <SWEEP_ID>"
-#      Full sweep path is: worrellie-iastro/<project>/<SWEEP_ID>
-#
-#   2. Submit N parallel agents (each runs one trial):
-#        sbatch --array=1-20%8 slurm_sweep_agent.sh worrellie-iastro/autoencoder_sweep/<SWEEP_ID>
-#      %8 limits max concurrent jobs to 8 — adjust for your cluster.
-#
-#   Or submit a single job:
-#        sbatch slurm_sweep_agent.sh worrellie-iastro/autoencoder_sweep/<SWEEP_ID>
 
 #SBATCH --job-name=ae_sweep
 #SBATCH --output=sweep_logs/run_%A_%a.out

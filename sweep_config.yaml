@@ -15,7 +15,7 @@ command:
   - -p
   - autoencoder_sweep
   - -e
-  - "50"
+  - "1000"
   - -s          # enable early stopping
 
 parameters:

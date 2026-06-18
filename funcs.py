@@ -350,7 +350,7 @@ def log_summary(train_outputs, valid_outputs, test_params, test = False):
 	valid_all_rel_losses = np.array([o["rel_loss"] for o in valid_outputs])
 
 	wandb.run.summary["mean_unscaled_mse"] = np.mean(valid_all_losses_unscaled)
-	wandb.run.summary["mean_rel_mse"] = np.mean(valid_all_rel_losses)
+	wandb.run.summary["mean_rel_mse"] = np.mean(valid_all_rel_losses) # unscaled i think...
 	wandb.run.summary["mean_overfit"] = np.mean(train_all_rel_losses) - np.mean(valid_all_rel_losses)
 
 def get_latent_space(loader, model, test_params, test=False):

@@ -107,6 +107,7 @@ class Trainer:
 			print(f"No clipping or normalization applied")
 
 		self.model.to(self.device)
+		self.best_model = copy.deepcopy(self.model) # so that best model is never None
 
 		train_losses = []
 		train_mses = []
@@ -263,6 +264,7 @@ class Trainer:
 
 
 			if valid_loader is not None:
+
 				# dont update weights/ train
 				self.model.eval()
 				with torch.no_grad():

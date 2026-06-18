@@ -358,8 +358,8 @@ def main():
 	#############################################################################################################################
 	# FINAL MODEL outputs
 
-	train_outputs = funcs.get_predictions(train_loader, model, test_params )
-	valid_outputs = funcs.get_predictions(valid_loader, model, test_params )
+	# train_outputs = funcs.get_predictions(train_loader, model, test_params )
+	# valid_outputs = funcs.get_predictions(valid_loader, model, test_params )
 
 	#############################################################################################################################
 	# BEST MODEL outputs
@@ -439,7 +439,7 @@ def main():
 			"references/valid_unscaled": wandb.Image(valid_fig_unscaled),
 			"references/valid_rel":   wandb.Image(valid_fig_rel),})
 
-	# TO DO:  need plot of log scale mse vs unscaled mse
+	# TODO:  need plot of log scale mse vs unscaled mse
 	log_vs_rel = plotting.plot_log_vs_rel_mse(losses_per_epoch, test_params, test=TESTING)
 	# log wandb
 
@@ -504,7 +504,8 @@ def main():
 			wandb.log({f"latent/train_{reduce_method}_{key}": wandb.Image(latent_fig)})
 			plt.close(latent_fig)
 
-	funcs.log_summary(train_outputs, valid_outputs, test_params, test=False)
+	# funcs.log_summary(train_outputs, valid_outputs, test_params, test=False)
+	funcs.log_summary(train_outputs_best, valid_outputs_best, test_params, test=False)
 
 if __name__ == "__main__":
 	main()
