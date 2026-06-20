@@ -368,8 +368,9 @@ class Trainer:
 
 				if do_checkpoint:
 					self.best_model = copy.deepcopy(self.model)
-					path_best_model = path.Path(self.test_name, f"{self.test_name}_best_model.pt")
-					self.checkpoint(self.model, path_best_model)
+					if not self.test:
+						path_best_model = path.Path(self.test_name, f"{self.test_name}_best_model.pt")
+						self.checkpoint(self.model, path_best_model)
 
 		logger.info("training finished")
 		
