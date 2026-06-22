@@ -177,6 +177,15 @@ class VAEAutoencoder(nn.Module):
 		x_hat = self.decoder_to_output(z)
 
 		return x_hat, mu, logvar
+	
+	def encode(self, x):
+		
+		x = self.act_func(self.input_to_encoder(x))
+
+		for l in self.encoder_layers:
+			x = self.act_func(l(x))
+
+		return self.encoder_to_latent(x)
 
 
 # class CNNAutoencoder(nn.Module):
