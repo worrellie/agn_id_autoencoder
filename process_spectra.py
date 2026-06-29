@@ -285,7 +285,7 @@ def get_id(base_name):
 def make_col_name_fits_compatible(col_name):
     # print(col_name)
 
-    col_name = col_name.replace("dblplaw","").upper().replace(":", "_").replace(".", "_").replace("_50", "")
+    col_name = col_name.replace("dblplaw","").upper().replace(":", "_").replace(".", "_").replace("_50", "").replace("TARGET", "")
     # print(col_name)
     
     col_name = col_name[0:7]
@@ -306,6 +306,7 @@ def save_spec( flux, l, original_z, snr, norm_factors, ref_cat_row, infile_base,
     hdr['NORM_MED'] = str(norm_factors['full_spec_median'])
 
     for col, val in ref_cat_row.items():
+        print(make_col_name_fits_compatible(col))
         hdr[make_col_name_fits_compatible(col)] = val
 
     hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
