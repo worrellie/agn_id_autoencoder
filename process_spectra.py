@@ -60,9 +60,6 @@ def get_common_grid(ref_triplet, ref_catalogue, z_col = "TARGET_REDSHIFT", z_tar
     blue_edges  = obs_min * factor
     red_edges   = obs_max * factor
 
-    print(blue_edges)
-    print(red_edges)
-
     common_blue = float(blue_edges.max())        # set by the LOWEST z
     common_red  = float(red_edges.min())         # set by the HIGHEST z
     assert common_blue < common_red, "no overlap — check inputs"
@@ -391,7 +388,7 @@ def main():
     else:
         region = get_common_grid(REF_TRIPLET, REF_CATALOGUE, z_col = Z_COL, z_target = Z_TARGET, z_range = [Z_LO, Z_HI])
 
-    common_vals = region["z_range"]    # "z_range": [Z_LO, Z_HI],
+    common_vals = [region["common_min"], region["common_max"]]
 
     #####################################################################################################################
     
