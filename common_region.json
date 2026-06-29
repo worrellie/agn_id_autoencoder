@@ -1,0 +1,14 @@
+{
+  "z_target": 0.9,
+  "z_range": [
+    0.9,
+    1.7
+  ],
+  "observed_min": 6469.999999999999,
+  "observed_max": 18000.0,
+  "common_min": 6469.983031794225,
+  "common_max": 12666.718453748526,
+  "n_galaxies_considered": 103182,
+  "set_by_z_min": 0.9000049829483032,
+  "set_by_z_max": 1.6999889612197876
+}

@@ -57,6 +57,8 @@ def main():
 		for triplet in valid_triplets
 	)
 
+	#########################################################################
+
 	# at this point, should have a folder of all the processed spectra
 	files, train_files, valid_files, test_files = funcs.sklearn_split_data(
 		output_dir, h5_filename
