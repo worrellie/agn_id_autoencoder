@@ -289,11 +289,11 @@ def save_spec( flux, l, original_z, snr, norm_factors, infile_base, outdir, nois
     hdr["NORM_CON"] = str(norm_factors['continuum_mean'])
     hdr['NORM_MED'] = str(norm_factors['full_spec_median'])
 
-    # hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
+    hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
 
     out_name = f"{infile_base}_{noise_type}_deZ_rebinned.fits"
 
-    # hdu.writeto(os.path.join(outdir, out_name), overwrite=True)
+    hdu.writeto(os.path.join(outdir, out_name), overwrite=True)
 
     return
 
@@ -405,9 +405,19 @@ def main():
 
     GRID_SIZE = 4.0  # Angstroms, for rebinning
 
+    # notes for me: partial returns new function with some of the arguments 'frozen'/ already set for passing to executor
+    # frozen args are the ones that every worker will use and will have the same.
     worker_function = partial(process_single_spec, common_vals = common_vals, grid_size = GRID_SIZE, de_z = Z_TARGET)
 
+    # notes for me: execute extra processes. each extra process is a separate worker.
+    # each separate worker is a separate python process, so they don't share memory.
+    # executor manages the poool of workers- queues and hands out tasks.
+    # worker chills until given task be executor then sends reuslts back and waits for next task
     with concurrent.futures.ProcessPoolExecutor(max_workers=cpus) as executor:
+        # executor.map applies the function to every item in the iterable (triplet_generator)
+        # and returns an iterator of results
+        # results come back in input order, not completion order. results are held back if the
+        # first task takes longer than the second, for example.
         results = executor.map(worker_function, triplet_generator)
 
         for finished_base_name in results:
