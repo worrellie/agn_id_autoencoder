@@ -7,6 +7,8 @@
 #SBATCH --time=12:00:00
 #SBATCH --mem=64G
 #SBATCH --cpus-per-task=16
+# ---- Email Notifications ----
+#SBATCH --mail-type=BEGIN,END,FAIL,TIME_LIMIT
 
 # ---- environment setup ----
 # Adjust this path to your actual working directory
