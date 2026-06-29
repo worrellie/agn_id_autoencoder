@@ -277,7 +277,23 @@ def calc_SNR(flux, l):
 
     return mean_flux, noise, snr
 
-def save_spec( flux, l, original_z, snr, norm_factors, infile_base, outdir, noise_type="noisy"):
+def get_id(base_name):
+    # returns the cosmosID from the base name of the file
+    # e.g. cosmos_bagpipes_202598_2h_z1.2546_RI.fits -> 202598
+    return base_name.split("_")[2]
+
+def make_col_name_fits_compatible(col_name):
+    # print(col_name)
+
+    col_name = col_name.replace("dblplaw","").upper().replace(":", "_").replace(".", "_").replace("_50", "")
+    # print(col_name)
+    
+    col_name = col_name[0:7]
+    # print(col_name)
+
+    return col_name
+
+def save_spec( flux, l, original_z, snr, norm_factors, ref_cat_row, infile_base, outdir, noise_type="noisy"):
 
     col1 = fits.Column(name="lambda", format="D", array=l)
     col2 = fits.Column(name="flux", format="D", array=flux)
@@ -289,6 +305,9 @@ def save_spec( flux, l, original_z, snr, norm_factors, infile_base, outdir, nois
     hdr["NORM_CON"] = str(norm_factors['continuum_mean'])
     hdr['NORM_MED'] = str(norm_factors['full_spec_median'])
 
+    for col, val in ref_cat_row.items():
+        hdr[make_col_name_fits_compatible(col)] = val
+
     hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
 
     out_name = f"{infile_base}_{noise_type}_deZ_rebinned.fits"
@@ -297,7 +316,7 @@ def save_spec( flux, l, original_z, snr, norm_factors, infile_base, outdir, nois
 
     return
 
-def process_single_spec(triplet, common_vals,grid_size = 4.0, de_z = 0.9):
+def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
 
     resampler = FluxConservingResampler(extrapolation_treatment="truncate")
 
@@ -355,7 +374,12 @@ def process_single_spec(triplet, common_vals,grid_size = 4.0, de_z = 0.9):
         output_dir = base_dir / "processed_spectra" # when var on left of / is pathlib.Path, / means to join paths
         output_dir.mkdir(parents=True, exist_ok=True) # create dir if it doesn't exist
 
-        save_spec(final_spec_flux, final_spec_l, redshift, snr, norm_factors, base_name, output_dir,)
+        id = get_id(base_name)
+        ref_cat_row = _CAT.get(id, {})
+        if not ref_cat_row:
+            print(f"ID {id} not found in reference catalogue")
+
+        save_spec(final_spec_flux, final_spec_l, redshift, snr, norm_factors, ref_cat_row, base_name, output_dir,)
 
         return base_name  # Useful for tracking progress
 
@@ -367,6 +391,15 @@ def process_single_spec(triplet, common_vals,grid_size = 4.0, de_z = 0.9):
         # Re-raise the error if you want the whole job to stop,
         # or return None if you want the job to keep going for other files
         raise e
+    
+_CAT = None
+def initialize_worker(ref_cat_path, id_col, data_cols):
+
+    global _CAT
+
+    tbl = Table.read(ref_cat_path)
+
+    _CAT = {str(row[id_col]): {col: row[col] for col in data_cols} for row in tbl}
 
 
 def main():
@@ -382,6 +415,11 @@ def main():
     Z_TARGET      = 0.9           # frame to deredshift into
     Z_LO, Z_HI    = 0.9, 1.7      # only consider galaxies in this range
     # OUT           = "ref_spec_and_ids/common_region.json"
+
+    DATA_COLS = ["TARGET_REDSHIFT", "TARGET_HMAG", "dblplaw:alpha_50", "dblplaw:beta_50",
+                 "dblplaw:tau_50", "dblplaw:massformed_50", "dblplaw:metallicity_50", "dblplaw:tau_50", "dust:Av_50", "stellar_mass_50",
+                 "formed_mass_50", "sfr_50", "ssfr_50", "nsfr_50", "mass_weighted_age_50",
+                 "tform_50", "tquench_50", "UV_colour_50", "VJ_colour_50" , "U_50", "V_50", "J_50", ]
 
     if check_common_region_exists("common_region.json"):
         region = load_common_region("common_region.json")
@@ -413,7 +451,7 @@ def main():
     # each separate worker is a separate python process, so they don't share memory.
     # executor manages the poool of workers- queues and hands out tasks.
     # worker chills until given task be executor then sends reuslts back and waits for next task
-    with concurrent.futures.ProcessPoolExecutor(max_workers=cpus) as executor:
+    with concurrent.futures.ProcessPoolExecutor(max_workers=cpus, initializer=initialize_worker, initargs=(REF_CATALOGUE, 'TARGET_ID', DATA_COLS)) as executor:
         # executor.map applies the function to every item in the iterable (triplet_generator)
         # and returns an iterator of results
         # results come back in input order, not completion order. results are held back if the
