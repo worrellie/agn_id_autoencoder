@@ -498,6 +498,49 @@ class TestGetValidTriplets:
 
         assert len(results) == 2
 
+    def test_each_galaxy_yields_its_own_redshift(self):
+        # Regression test: the old implementation assigned z_float inside the
+        # inner file-listing loop but yielded it in a separate base_name loop,
+        # causing every galaxy to get the redshift of the last file seen.
+        # The fix extracts z from the assembled triplet's first file instead.
+        z1, z2 = "1.2", "1.5"
+        base1 = "cosmos_bagpipes_123"
+        base2 = "cosmos_bagpipes_456"
+        z_dir = "z_mixed"
+
+        files_base1 = [f"{base1}_z{z1}_{b}.fits" for b in ["RI", "YJ", "H"]]
+        files_base2 = [f"{base2}_z{z2}_{b}.fits" for b in ["RI", "YJ", "H"]]
+
+        def listdir_fn(path):
+            if path == _SPEC_DIR:
+                return [z_dir]
+            return files_base1 + files_base2
+
+        def isdir_fn(path):
+            return path == os.path.join(_SPEC_DIR, z_dir)
+
+        def glob_fn(pattern):
+            for base, z in [(base1, z1), (base2, z2)]:
+                for band in ["RI", "YJ", "H"]:
+                    if base in pattern and f"_{band}.fits" in pattern:
+                        return [os.path.join(_SPEC_DIR, z_dir, f"{base}_z{z}_{band}.fits")]
+            return []
+
+        with patch("process_spectra.os.listdir", side_effect=listdir_fn), \
+             patch("process_spectra.os.path.isdir", side_effect=isdir_fn), \
+             patch("process_spectra.glob.glob", side_effect=glob_fn):
+            results = list(get_valid_triplets(_SPEC_DIR))
+
+        assert len(results) == 2
+
+        yielded = {}
+        for triplet, z in results:
+            base = os.path.basename(triplet[0]).split("_z")[0]
+            yielded[base] = z
+
+        assert yielded[base1] == pytest.approx(float(z1))
+        assert yielded[base2] == pytest.approx(float(z2))
+
 
 # ---------------------------------------------------------------------------
 # 9. get_channel_data  (mocks fits.getdata)
@@ -663,6 +706,22 @@ class TestSaveSpec:
         # "TARGET_REDSHIFT" is mangled by make_col_name_fits_compatible
         expected_key = make_col_name_fits_compatible("TARGET_REDSHIFT")
         assert expected_key in hdr
+
+    def test_og_z_and_redshi_are_equal(self, spec_args):
+        """OG_Z (from the z argument) and _REDSHI (TARGET_REDSHIFT from ref_cat_row)
+        must hold the same numeric value — both represent the same galaxy redshift."""
+        captured = []
+
+        def capture(cols, header=None):
+            captured.append(header)
+            return MagicMock()
+
+        with patch("process_spectra.fits.BinTableHDU.from_columns", side_effect=capture):
+            save_spec(*spec_args)
+
+        hdr = captured[0]
+        # OG_Z is stored as str(z); _REDSHI is stored as the raw float from ref_cat_row
+        assert float(hdr["OG_Z"]) == pytest.approx(float(hdr["_REDSHI"]))
 
 
 # ---------------------------------------------------------------------------

@@ -94,8 +94,55 @@ def check_common_region_exists(json_path):
     else:
         print(f"common region file {json_path} already exists, skipping creation.")
         return True
-        
+    
+def get_all_base_paths(spec_dir):
+
+    base_paths = set()
+    for z_dir in os.listdir(spec_dir):
+        # for z folders inside spec dir..
+        if not os.path.isdir(os.path.join(spec_dir, z_dir)):
+            # if does not exist, skip
+            continue
+        for s in os.listdir(os.path.join(spec_dir, z_dir)):
+            # if does exist, for each file, check if its a spectrum
+            if not s.startswith("cosmos_bagpipes_"):
+                # if not spec file, skip
+                continue
+            # if it is a spectrum, get the base name of the spectrum (ie without the band)
+            base_name = s.split("_z")[0] # returns 'cosmos_bagpiped_{id}'
+            base_path = os.path.join(spec_dir, z_dir, base_name)
+            # add base name to set (set will automatically handle duplicates)
+            base_paths.add(base_path)
+
+    base_paths = sorted(base_paths) # sort the base names for reproducibility
+    # note: shuffling will occur when making HDF5 anyway
+
+    return base_paths
+
 def get_valid_triplets(spec_dir):
+
+    base_paths = get_all_base_paths(spec_dir)
+    
+    for base_name in base_paths:
+        # for every base name (spectrum)
+        triplet = []
+        for band in ["RI", "YJ", "H"]:
+            # get file for every band
+            expected_path = f"{base_name}_*_{band}.fits"
+            matching = glob.glob(expected_path)
+            # matching = glob.glob(os.path.join("spectra", "**", expected_file), recursive=True)
+            if not matching:
+                # if cant find one of the bands, skip this base name
+                print(f"missing {band} for {base_name}, skipping")
+                break
+            # if found, add to triplet
+            triplet.append(matching[0])
+        else: # only executes if the for loop completes without a break (ie all bands found)
+            z = os.path.basename(triplet[0]).split("_z")[1].split("_")[0] # returns 'redshift'
+            z_float = float(z)
+            yield triplet, z_float # makes a GENERATOR, gives back one triplet at 'pauses'
+        
+def get_valid_triplets_deprecated(spec_dir):
 
     for z_dir in os.listdir(spec_dir):
         if not os.path.isdir(os.path.join(spec_dir, z_dir)):
@@ -124,7 +171,6 @@ def get_valid_triplets(spec_dir):
                 triplet.append(matching[0])
             else:
                 yield triplet, z_float # makes a GENERATOR, gives back one triplet at 'pauses'
-
 
 def get_channel_data(channel_path, t=1):
 
@@ -285,7 +331,7 @@ def get_id(base_name):
 def make_col_name_fits_compatible(col_name):
     # print(col_name)
 
-    col_name = col_name.replace("dblplaw","").upper().replace(":", "_").replace(".", "_").replace("_50", "").replace("TARGET", "")
+    col_name = col_name.replace("dblplaw","").upper().replace(":", "_").replace(".", "_").replace("_50", "").replace("TARGET", "").replace("_", "")
     # print(col_name)
     
     col_name = col_name[0:7]
