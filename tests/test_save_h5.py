@@ -17,6 +17,7 @@ import numpy as np
 import pytest
 
 from save_h5 import check_h5_samples
+from save_h5 import discover_param_keys
 from save_h5 import save_h5 as save_h5_fn
 from save_h5 import sklearn_split_data
 
@@ -78,6 +79,7 @@ def _make_mock_hdul(
     norm_med=NORM_MED,
     og_z=OG_Z,
     snr=SNR_VAL,
+    extra_header_vals=None,
 ):
     """
     Build a MagicMock that satisfies the astropy HDUList context-manager
@@ -87,6 +89,8 @@ def _make_mock_hdul(
             hdul[1].data["lambda"]      → lambda_arr
             hdul[1].data["flux"]        → flux_arr (real ndarray, .astype works)
             hdul[1].header.get(key)     → header_vals[key]
+            hdul[1].header[key]         → header_vals[key]   (subscript access)
+            hdul[1].header.cards        → [] (empty — discover_param_keys returns [])
     """
     if flux_arr is None:
         flux_arr = TRAIN_FLUX.copy()
@@ -99,6 +103,8 @@ def _make_mock_hdul(
         "OG_Z": og_z,
         "SNR": snr,
     }
+    if extra_header_vals:
+        header_vals.update(extra_header_vals)
 
     mock_data = MagicMock()
     mock_data.__getitem__ = MagicMock(
@@ -107,6 +113,8 @@ def _make_mock_hdul(
 
     mock_header = MagicMock()
     mock_header.get = MagicMock(side_effect=lambda key, *a: header_vals.get(key))
+    mock_header.__getitem__ = MagicMock(side_effect=lambda key: header_vals[key])
+    mock_header.cards = []
 
     mock_hdu1 = MagicMock()
     mock_hdu1.data = mock_data
@@ -277,7 +285,7 @@ class TestSaveH5:
         hdul = _make_mock_hdul()
         with patch("save_h5.fits.open", return_value=hdul):
             save_h5_fn(
-                h5_path, _ALL_FILES, _TRAIN_FILES, _VALID_FILES, _TEST_FILES
+                "ref.fits", h5_path, _ALL_FILES, _TRAIN_FILES, _VALID_FILES, _TEST_FILES
             )
         self.h5_path = h5_path
 
@@ -437,7 +445,7 @@ class TestSaveH5NormGuards:
         test = ["f2.fits"]
         files = train + valid + test
         with patch("save_h5.fits.open", return_value=hdul):
-            save_h5_fn(h5_path, files, train, valid, test)
+            save_h5_fn("ref.fits", h5_path, files, train, valid, test)
 
     def test_norm_con_zero_emits_warning(self, h5_path):
         with pytest.warns(UserWarning, match="NORM_CON"):
@@ -562,3 +570,230 @@ class TestCheckH5Samples:
                 pytest.fail(
                     f"check_h5_samples raised unexpectedly with missing splits: {exc}"
                 )
+
+
+# ---------------------------------------------------------------------------
+# 5. discover_param_keys
+# ---------------------------------------------------------------------------
+
+
+def _make_hdul_with_cards(card_keywords):
+    """Return a mock HDUList whose header.cards yields the given keywords."""
+    mock_cards = []
+    for kw in card_keywords:
+        card = MagicMock()
+        card.keyword = kw
+        mock_cards.append(card)
+
+    mock_header = MagicMock()
+    mock_header.cards = mock_cards
+
+    mock_hdu1 = MagicMock()
+    mock_hdu1.header = mock_header
+
+    mock_hdul = MagicMock()
+    mock_hdul.__enter__ = MagicMock(return_value=mock_hdul)
+    mock_hdul.__exit__ = MagicMock(return_value=False)
+    mock_hdul.__getitem__ = MagicMock(return_value=mock_hdu1)
+    return mock_hdul
+
+
+class TestDiscoverParamKeys:
+    """discover_param_keys filters FITS boilerplate and system keys from a header."""
+
+    def _run(self, card_keywords):
+        hdul = _make_hdul_with_cards(card_keywords)
+        with patch("save_h5.fits.open", return_value=hdul):
+            return discover_param_keys("fake.fits")
+
+    def test_empty_header_returns_empty_list(self):
+        assert self._run([]) == []
+
+    def test_returns_list_type(self):
+        assert isinstance(self._run(["_REDSHI"]), list)
+
+    def test_system_keys_excluded(self):
+        from save_h5 import SYSTEM_KEYS
+        result = self._run(list(SYSTEM_KEYS) + ["_REDSHI"])
+        for key in SYSTEM_KEYS:
+            assert key not in result
+
+    def test_fits_boilerplate_excluded(self):
+        boilerplate = ["BITPIX", "NAXIS", "NAXIS1", "NAXIS2", "PCOUNT", "GCOUNT",
+                       "TFIELDS", "SIMPLE", "EXTEND", "COMMENT", "HISTORY"]
+        result = self._run(boilerplate + ["_REDSHI"])
+        for key in boilerplate:
+            assert key not in result
+
+    def test_empty_string_keyword_excluded(self):
+        result = self._run(["", "_REDSHI"])
+        assert "" not in result
+        assert "_REDSHI" in result
+
+    def test_tform_prefix_excluded(self):
+        result = self._run(["TFORM1", "TFORM22", "_REDSHI"])
+        assert "TFORM1" not in result
+        assert "TFORM22" not in result
+
+    def test_ttype_prefix_excluded(self):
+        result = self._run(["TTYPE1", "_REDSHI"])
+        assert "TTYPE1" not in result
+
+    def test_tunit_prefix_excluded(self):
+        result = self._run(["TUNIT3", "_REDSHI"])
+        assert "TUNIT3" not in result
+
+    def test_catalogue_keys_returned(self):
+        result = self._run(["OG_Z", "_REDSHI", "HMAG", "MAG_I"])
+        assert "_REDSHI" in result
+        assert "HMAG" in result
+        assert "MAG_I" in result
+
+    def test_order_preserved(self):
+        keywords = ["HMAG", "_REDSHI", "MAG_I"]
+        result = self._run(keywords)
+        assert result == keywords
+
+
+# ---------------------------------------------------------------------------
+# 6. save_h5 — per-spectrum catalogue parameter datasets
+# ---------------------------------------------------------------------------
+
+
+class TestSaveH5ParamDatasets:
+    """
+    When discover_param_keys returns non-empty keys, save_h5 must create one
+    dataset per key in every split group and populate it from the FITS header.
+    """
+
+    _PARAM_KEY = "_REDSHI"
+    _PARAM_VAL = 1.1
+
+    @pytest.fixture(autouse=True)
+    def _write_h5(self, h5_path):
+        hdul = _make_mock_hdul(extra_header_vals={self._PARAM_KEY: self._PARAM_VAL})
+        with patch("save_h5.fits.open", return_value=hdul), \
+             patch("save_h5.discover_param_keys", return_value=[self._PARAM_KEY]):
+            save_h5_fn(
+                "ref.fits", h5_path, _ALL_FILES, _TRAIN_FILES, _VALID_FILES, _TEST_FILES
+            )
+        self.h5_path = h5_path
+
+    def test_param_dataset_created_in_train(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert self._PARAM_KEY in hf["train"]
+
+    def test_param_dataset_created_in_validation(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert self._PARAM_KEY in hf["validation"]
+
+    def test_param_dataset_created_in_test(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert self._PARAM_KEY in hf["test"]
+
+    def test_param_dataset_shape_matches_split_size(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert hf["train"][self._PARAM_KEY].shape == (len(_TRAIN_FILES),)
+            assert hf["validation"][self._PARAM_KEY].shape == (len(_VALID_FILES),)
+            assert hf["test"][self._PARAM_KEY].shape == (len(_TEST_FILES),)
+
+    def test_param_values_stored_from_header(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert np.allclose(hf["train"][self._PARAM_KEY][:], self._PARAM_VAL)
+
+
+# ---------------------------------------------------------------------------
+# 7. save_h5 — skip-and-trim behaviour (row counter + dataset resize)
+# ---------------------------------------------------------------------------
+
+# 3-file train split so we can have: succeed, fail, succeed
+_SKIP_TRAIN = ["fa.fits", "fb.fits", "fc.fits"]
+_SKIP_VALID = ["fd.fits"]
+_SKIP_TEST  = ["fe.fits"]
+_SKIP_ALL   = _SKIP_TRAIN + _SKIP_VALID + _SKIP_TEST
+
+
+def _open_with_one_bad_file(path):
+    """fits.open side_effect: raises OSError for fb.fits, succeeds for everything else."""
+    if os.path.basename(path) == "fb.fits":
+        raise OSError("corrupt FITS")
+    return _make_mock_hdul()
+
+
+class TestSaveH5SkipHandling:
+    """
+    Verify the row-counter / resize / skipped-attr pattern:
+    - datasets are over-allocated then trimmed after any FITS errors
+    - skipped filenames are recorded in group.attrs["skipped"]
+    - successful files before and after the error are written correctly
+    - Welford stats exclude the erroring file
+    """
+
+    @pytest.fixture(autouse=True)
+    def _write_h5(self, h5_path):
+        with patch("save_h5.fits.open", side_effect=_open_with_one_bad_file), \
+             patch("save_h5.discover_param_keys", return_value=[]):
+            save_h5_fn(
+                "ref.fits", h5_path, _SKIP_ALL, _SKIP_TRAIN, _SKIP_VALID, _SKIP_TEST
+            )
+        self.h5_path = h5_path
+
+    # ── Dataset trimming ─────────────────────────────────────────────────────
+
+    def test_train_raw_flux_trimmed_to_successful_rows(self):
+        # 3 train files, 1 errored → shape (2, N_PIXELS)
+        with h5py.File(self.h5_path, "r") as hf:
+            assert hf["train"]["raw_flux"].shape == (2, N_PIXELS)
+
+    def test_train_redshift_trimmed_to_successful_rows(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert hf["train"]["redshift"].shape == (2,)
+
+    def test_train_snr_trimmed_to_successful_rows(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert hf["train"]["SNR"].shape == (2,)
+
+    def test_train_obj_id_trimmed_to_successful_rows(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert hf["train"]["obj_id"].shape == (2,)
+
+    # ── Skipped attribute ────────────────────────────────────────────────────
+
+    def test_skipped_attr_stored_on_erroring_group(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert "skipped" in hf["train"].attrs
+
+    def test_skipped_attr_contains_erroring_filename(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            skipped = list(hf["train"].attrs["skipped"])
+            assert b"fb.fits" in skipped
+
+    def test_no_skipped_attr_when_all_succeed(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert "skipped" not in hf["validation"].attrs
+            assert "skipped" not in hf["test"].attrs
+
+    # ── Correct data for successful files ────────────────────────────────────
+
+    def test_first_successful_file_obj_id(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert hf["train"]["obj_id"][0] == b"fa.fits"
+
+    def test_file_after_skip_also_written(self):
+        # fc.fits (index 2) comes after the erroring fb.fits; it must land at row 1
+        with h5py.File(self.h5_path, "r") as hf:
+            assert hf["train"]["obj_id"][1] == b"fc.fits"
+
+    def test_successful_splits_are_full_size(self):
+        with h5py.File(self.h5_path, "r") as hf:
+            assert hf["validation"]["raw_flux"].shape == (1, N_PIXELS)
+            assert hf["test"]["raw_flux"].shape      == (1, N_PIXELS)
+
+    # ── Welford stats exclude the erroring file ───────────────────────────────
+
+    def test_welford_stats_only_count_successful_files(self):
+        # fa and fc both contribute TRAIN_FLUX; fb never opened → same expected
+        # values as normal 2-file case (both files have identical TRAIN_FLUX)
+        with h5py.File(self.h5_path, "r") as hf:
+            assert hf.attrs["raw_mean"] == pytest.approx(EXPECTED_RAW_MEAN, abs=1e-10)
+            assert hf.attrs["raw_std"]  == pytest.approx(EXPECTED_RAW_STD,  abs=1e-10)
