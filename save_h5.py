@@ -165,7 +165,15 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                         unmasked = (raw_flux != 0)
 
                         norm_factor_continuum = hdr.get("NORM_CON")
-                        norm_factor_median = hdr.get("NORM_MED")
+                        norm_factor_median   = hdr.get("NORM_MED")
+                        try:
+                            norm_factor_continuum = float(norm_factor_continuum)
+                        except (TypeError, ValueError):
+                            norm_factor_continuum = None      # falls into the "invalid -> 1.0" branch below
+                        try:
+                            norm_factor_median = float(norm_factor_median)
+                        except (TypeError, ValueError):
+                            norm_factor_median = None
 
                         if (norm_factor_continuum is None or norm_factor_continuum == 0
                                 or np.isnan(norm_factor_continuum)):
@@ -242,7 +250,7 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                     dset.resize(row, axis=0)
 
             if skipped:
-                group.attrs["skipped"] = np.array(skipped, dtype="S")
+                group.create_dataset("skipped", data=np.array(skipped, dtype="S"))
 
             # ---- final training stats (unchanged maths) ----
             if split_name == "train":
