@@ -43,16 +43,16 @@ def get_common_grid(ref_triplet, ref_catalogue, z_col = "TARGET_REDSHIFT", z_tar
         band_wmin = band_header["WMIN"]
         band_wmax = band_header["WMAX"]
         band_bounds[band] = (band_wmin, band_wmax)
-        print(f"{band}: {band_wmin} - {band_wmax} - ({band_wmax - band_wmin} px)")
+        # print(f"{band}: {band_wmin} - {band_wmax} - ({band_wmax - band_wmin} px)")
 
     obs_min = min(lo for lo, _ in band_bounds.values())
     obs_max = max(hi for _, hi in band_bounds.values())
-    print(f"observed combined span: {obs_min} - {obs_max}")
+    # print(f"observed combined span: {obs_min} - {obs_max}")
 
     # 2. redshifts in range
     z = np.asarray(Table.read(ref_catalogue)[z_col], dtype=float)
     z = z[np.isfinite(z) & (z >= z_lo) & (z <= z_hi)]
-    print(f"{z.size} galaxies in {z_lo} <= z <= {z_hi}")
+    # print(f"{z.size} galaxies in {z_lo} <= z <= {z_hi}")
 
     # 3. deredshift each edge into the z=0.9 frame and intersect
     #    lambda_target = lambda_obs * (1 + Z_TARGET) / (1 + z)
@@ -63,7 +63,7 @@ def get_common_grid(ref_triplet, ref_catalogue, z_col = "TARGET_REDSHIFT", z_tar
     common_blue = float(blue_edges.max())        # set by the LOWEST z
     common_red  = float(red_edges.min())         # set by the HIGHEST z
     assert common_blue < common_red, "no overlap — check inputs"
-    print(f"common region (z={z_target} frame): {common_blue} - {common_red}")
+    # print(f"common region (z={z_target} frame): {common_blue} - {common_red}")
 
     # 4. write it out for the rest of the pipeline
     region = {
@@ -77,7 +77,7 @@ def get_common_grid(ref_triplet, ref_catalogue, z_col = "TARGET_REDSHIFT", z_tar
     out = "./common_region.json"
     with open(out, "w") as f:
         json.dump(region, f, indent=2)
-    print(f"wrote {out}")
+    # print(f"wrote {out}")
 
     return region
 
@@ -92,7 +92,7 @@ def check_common_region_exists(json_path):
         # find_common_grid(REF_TRIPLET, REF_CATALOGUE, z_col = Z_COL, z_target = Z_TARGET, z_range = [Z_LO, Z_HI])
         return False
     else:
-        print(f"common region file {json_path} already exists, skipping creation.")
+        # print(f"common region file {json_path} already exists, skipping creation.")
         return True
     
 def get_all_base_paths(spec_dir):
@@ -120,6 +120,34 @@ def get_all_base_paths(spec_dir):
     return base_paths
 
 def get_valid_triplets(spec_dir):
+    # improvement on deprecated_2 because it lists each directory only once.
+    # previously, it would glob (list the full dir) for each band for every spec
+    # would (did) take aaaaages.
+    for z_dir in sorted(os.listdir(spec_dir)):
+        zpath = os.path.join(spec_dir, z_dir)
+        if not os.path.isdir(zpath):
+            continue
+
+        buckets = {}                          # base_name -> {"RI": path, ...}
+        for s in os.listdir(zpath):           # ONE listing per directory
+            if not s.startswith("cosmos_bagpipes_"):
+                continue
+            base = s.split("_z")[0]
+            band = s.rsplit("_", 1)[1].replace(".fits", "")
+            if band not in ("RI", "YJ", "H"):
+                continue
+            buckets.setdefault(base, {})[band] = os.path.join(zpath, s)
+
+        for base in sorted(buckets):          # sorted -> reproducible order
+            bands = buckets[base]
+            if not all(b in bands for b in ("RI", "YJ", "H")):
+                print(f"missing band for {base}, skipping", file=sys.stderr)
+                continue
+            triplet = [bands["RI"], bands["YJ"], bands["H"]]
+            z = os.path.basename(triplet[0]).split("_z")[1].split("_")[0]
+            yield triplet, float(z)
+
+def get_valid_triplets_deprecated_2(spec_dir):
 
     base_paths = get_all_base_paths(spec_dir)
     
@@ -352,7 +380,7 @@ def save_spec( flux, l, original_z, snr, norm_factors, ref_cat_row, infile_base,
     hdr['NORM_MED'] = str(norm_factors['full_spec_median'])
 
     for col, val in ref_cat_row.items():
-        print(make_col_name_fits_compatible(col))
+        # print(make_col_name_fits_compatible(col))
         hdr[make_col_name_fits_compatible(col)] = val
 
     hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
@@ -371,6 +399,13 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
     ri_p, yj_p, h_p = t[0], t[1], t[2]
     base_name = os.path.basename(ri_p).replace("_RI.fits", "")
     base_dir = Path(ri_p).parent.parent.parent  # parent of spectra/ dir (parent of parent of triplet)
+
+    output_dir = base_dir / "processed_spectra" # when var on left of / is pathlib.Path, / means to join paths
+    output_dir.mkdir(parents=True, exist_ok=True) # create dir if it doesn't exist
+
+    out_path = output_dir / f"{base_name}_noisy_deZ_rebinned.fits"
+    if out_path.exists():
+        return base_name
 
     try:
         original_de_z_flux, original_de_z_l = [], []
@@ -418,12 +453,10 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
                         'full_spec_median' : full_spec_median}
 
         # save spectrum in fits
-        output_dir = base_dir / "processed_spectra" # when var on left of / is pathlib.Path, / means to join paths
-        output_dir.mkdir(parents=True, exist_ok=True) # create dir if it doesn't exist
-
         id = get_id(base_name)
-        ref_cat_row = _CAT.get(id, {})
-        if not ref_cat_row:
+        idx = _IDS.get(id)
+        ref_cat_row = {c: _COLS[c][idx] for c in _COLS} if idx is not None else {}
+        if idx is None:
             print(f"ID {id} not found in reference catalogue")
 
         save_spec(final_spec_flux, final_spec_l, redshift, snr, norm_factors, ref_cat_row, base_name, output_dir,)
@@ -439,14 +472,17 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
         # or return None if you want the job to keep going for other files
         raise e
     
-_CAT = None
+_IDS = None
+_COLS = None
 def initialize_worker(ref_cat_path, id_col, data_cols):
 
-    global _CAT
+    global _IDS, _COLS
 
     tbl = Table.read(ref_cat_path)
 
-    _CAT = {str(row[id_col]): {col: row[col] for col in data_cols} for row in tbl}
+    _COLS = {c: np.asarray(tbl[c].filled(np.nan) if hasattr(tbl[c], "filled")
+                           else tbl[c], dtype="f8") for c in data_cols}
+    _IDS = {gid: i for i, gid in enumerate(np.asarray(tbl[id_col]).astype(str))}
 
 
 def main():
@@ -476,6 +512,7 @@ def main():
     common_vals = [region["common_min"], region["common_max"]]
 
     #####################################################################################################################
+     
     
     if os.environ.get("SLURM_CPUS_PER_TASK") is not None:
         print("running on cluster")
@@ -507,7 +544,7 @@ def main():
 
         for finished_base_name in results:
             if finished_base_name:
-                print(f"Finished processing: {finished_base_name}")
+                # print(f"Finished processing: {finished_base_name}")
                 pass
 
     #####################################################################################################################
