@@ -1,8 +1,9 @@
-import os, glob
+import os
 from astropy.io import fits
 
-PROC_DIR = "processed_spectra"     # the flat output dir
-EXPECTED_PIXELS = 1549             # your known grid length
+PROC_DIR = "processed_spectra"     # flat output dir
+EXPECTED_PIXELS = 1549
+SUFFIX = "_deZ_rebinned.fits"
 
 def check_file(path):
     """Return None if healthy, else a short reason string."""
@@ -14,26 +15,30 @@ def check_file(path):
             if n != EXPECTED_PIXELS:
                 return f"wrong length: {n} (expected {EXPECTED_PIXELS})"
             hdr = hdul[1].header
-            for k in ("OG_Z", "SNR"):          # keys the H5 reader needs
+            for k in ("OG_Z", "SNR"):
                 if k not in hdr:
                     return f"missing header key {k}"
     except Exception as e:
-        return f"unreadable: {type(e).__name__}"   # truncated/corrupt -> raises here
+        return f"unreadable: {type(e).__name__}"
     return None
 
 def main():
-    files = glob.glob(os.path.join(PROC_DIR, "*_deZ_rebinned.fits"))
-    print(f"checking {len(files)} files in {PROC_DIR}/ ...")
+    print(f"scanning {PROC_DIR}/ ...", flush=True)
 
     bad = []
-    for i, f in enumerate(files):
-        why = check_file(f)
-        if why:
-            bad.append((f, why))
-        if (i + 1) % 5000 == 0:
-            print(f"  {i+1}/{len(files)}  ({len(bad)} bad so far)")
+    checked = 0
+    with os.scandir(PROC_DIR) as it:        # streams entries, no big list built
+        for entry in it:
+            if not entry.name.endswith(SUFFIX):
+                continue
+            why = check_file(entry.path)
+            if why:
+                bad.append((entry.path, why))
+            checked += 1
+            if checked % 5000 == 0:
+                print(f"  {checked} checked, {len(bad)} bad so far", flush=True)
 
-    print(f"\n{len(bad)} bad file(s) of {len(files)}")
+    print(f"\n{checked} files checked, {len(bad)} bad", flush=True)
     for f, why in bad:
         print(f"  {why:35s} {os.path.basename(f)}")
 
