@@ -42,3 +42,8 @@ spectra/
 w0*/
 bay7u*/
 
+char_plots/
+
+stats_all.csv
+stats_trainval.csv
+all_spectra.h5
