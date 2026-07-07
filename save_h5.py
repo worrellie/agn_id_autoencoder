@@ -120,30 +120,30 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
 
             # maxshape=(None, ...) makes axis 0 resizable so we can trim skips later
             d_flux_log = group.create_dataset(
-                "log_scale_flux", (n_samples, n_pixels), dtype="f8",
+                "log_scale_flux", (n_samples, n_pixels), dtype="f4",
                 maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
             )
             # d_flux_norm_cont = group.create_dataset(
-            #     "normalized_flux_cont", (n_samples, n_pixels), dtype="f8",
+            #     "normalized_flux_cont", (n_samples, n_pixels), dtype="f4",
             #     maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
             # )
             # d_flux_norm_med = group.create_dataset(
-            #     "normalized_flux_med", (n_samples, n_pixels), dtype="f8",
+            #     "normalized_flux_med", (n_samples, n_pixels), dtype="f4",
             #     maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
             # )
             d_flux_raw = group.create_dataset(
-                "raw_flux", (n_samples, n_pixels), dtype="f8",
+                "raw_flux", (n_samples, n_pixels), dtype="f4",
                 maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
             )
 
-            d_z   = group.create_dataset("redshift", (n_samples,), dtype="f8",  maxshape=(None,))
-            d_snr = group.create_dataset("SNR",      (n_samples,), dtype="f8",  maxshape=(None,))
+            d_z   = group.create_dataset("redshift", (n_samples,), dtype="f4",  maxshape=(None,))
+            d_snr = group.create_dataset("SNR",      (n_samples,), dtype="f4",  maxshape=(None,))
             d_ids = group.create_dataset("obj_id",   (n_samples,), dtype="S100", maxshape=(None,))
-            d_norm_con = group.create_dataset("NORM_CON", (n_samples,), dtype="f8",  maxshape=(None,))
-            d_norm_med = group.create_dataset("NORM_MED", (n_samples,), dtype="f8",  maxshape=(None,))
+            d_norm_con = group.create_dataset("NORM_CON", (n_samples,), dtype="f4",  maxshape=(None,))
+            d_norm_med = group.create_dataset("NORM_MED", (n_samples,), dtype="f4",  maxshape=(None,))
             
             param_dsets = {
-                kw: group.create_dataset(kw, (n_samples,), dtype="f8", maxshape=(None,))
+                kw: group.create_dataset(kw, (n_samples,), dtype="f4", maxshape=(None,))
                 for kw in param_keys
             }
 
@@ -369,10 +369,13 @@ def check_h5_structure(name, obj):
     elif isinstance(obj, h5py.Dataset):
         print(f"{indent}📊 Dataset: {name} | Shape: {obj.shape} | Type: {obj.dtype}")
 
+######################################################################################
+####################################### MAIN #########################################
+######################################################################################
 def main():
 
     output_dir = "processed_spectra"
-    h5_filename = "all_spectra.h5"
+    h5_filename = "all_spectra_float32.h5"
 
     result = sklearn_split_data(
             output_dir, h5_filename
