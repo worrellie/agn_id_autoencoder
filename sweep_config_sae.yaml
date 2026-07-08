@@ -3,6 +3,11 @@ method: bayes
 metric:
   name: final/best_valid_unscaled_mse
   goal: minimize
+early_terminate:
+  type: hyperband
+  min_iter: 100    # do first check at 50 epochs
+  eta: 2      # keep top performing third
+run_cap: 50
 
 # Fixed params passed as CLI args (not swept).
 # Adjust these for your data and cluster setup.
@@ -19,8 +24,11 @@ command:
   # - -s          # enable early stopping
 
 parameters:
+  epochs:
+    values: [300]
+
   latent_size:
-    values: [2, 16, 32, 64, 128]
+    values: [2, 16, 32, 64, 128, 256]
 
   learn_rate:
     distribution: log_uniform_values
@@ -29,12 +37,12 @@ parameters:
 
   weight_decay:
     distribution: log_uniform_values
-    min: 1.0e-10
+    min: 1.0e-8
     max: 1.0e-4
 
   n_layers:
     values: [1, 2, 3]
 
   activation:
-    values: [ReLU, Tanh, LeakyReLU]
+    values: [LeakyReLU]
 
