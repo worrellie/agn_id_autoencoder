@@ -331,6 +331,7 @@ def calc_SNR(flux, l):
     flux = np.asarray(flux)
     l = np.asarray(l)
 
+    # look at only continuum region of spectrum
     target_mask = (l >= 5100) & (l <= 5800) & (flux != 0)
 
     target_flux = flux[target_mask]
@@ -349,6 +350,7 @@ def calc_SNR(flux, l):
 
     snr = mean_flux / noise
 
+    # return continuum mean, noise (std) and snr
     return mean_flux, noise, snr
 
 def get_id(base_name):
@@ -408,6 +410,7 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
         return base_name
 
     try:
+        
         original_de_z_flux, original_de_z_l = [], []
         original_flux_rest, original_l_rest = [], []
         channel_pairs = []
@@ -417,6 +420,7 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
                 channel
             )  # Assuming t=1 is hardcoded or parsed
 
+            # de-redshift each channel to rest and given z (0.9)
             flux_de_z, l_de_z = deredshift_channel(flux, l, redshift, de_z=de_z)
             flux_rest, l_rest = deredshift_channel(flux, l, redshift, de_z=0.0)
 
@@ -425,13 +429,15 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
             original_flux_rest.extend(flux_rest)
             original_l_rest.extend(l_rest)
 
+            # rebin each channel to common grid
             f_rebinned, l_rebinned = rebin_channel(
                 flux_de_z, l_de_z, resampler, grid_size=grid_size
             )
             channel_pairs.append([f_rebinned, l_rebinned])
 
-        # merge channels and get final spectrum
+        # combine channels to one spectrum
         spec_flux, spec_l = merge_channels(channel_pairs, grid_size=grid_size)
+        # crop spectrum to common wavelength region
         final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
 
         # check for fully masked spectra
@@ -439,12 +445,10 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
         if mask.all():
             print(f"fully masked spec: {base_name}")
 
-        # get normalization factors
+        # get normalization factors (saved and stored in fits spectrum )
         cont_mean, noise, snr = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
         if (noise == 0.0 and snr == 0.0) or (cont_mean == 0.0 or np.isnan(cont_mean) or cont_mean is None):
             print(f"invalid spec {base_name} with ({cont_mean}, {noise}, {snr})")
-
-
         full_spec_median = np.median(final_spec_flux[~mask])
         if  (full_spec_median == 0.0 or np.isnan(full_spec_median) or full_spec_median is None):
             print(f"invalid spec {base_name} with {full_spec_median}")
