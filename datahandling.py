@@ -20,11 +20,12 @@ logger = logging.getLogger(__name__)
 
 class H5SpecDataset(torch.utils.data.Dataset):
     
-    def __init__(self, data_path, split, flux_type="normalized_flux_cont", preload="none"):
+    def __init__(self, data_path, split, flux_type="normalized_flux_cont", preload="none", device = "cpu"):
         self.data_path = data_path
         self.split = split
         self.flux_type = flux_type
         self.preload = preload
+        self.device = device
         if self.flux_type == "normalized_flux_cont":
             mean_key = "norm_mean_cont"
             std_key = "norm_std_cont"
@@ -42,8 +43,14 @@ class H5SpecDataset(torch.utils.data.Dataset):
             self.flux_type = "normalized_flux_cont"
             mean_key = "norm_mean_cont"
             std_key = "norm_std_cont"
+        
+        self.hf = None
+        self.data = None
 
+        self.redshifts = None
+        self.snr = None
 
+        # dont need to initialise as None, because code is unconditional
         with h5py.File(self.data_path, "r") as hf:
             self.l = hf.attrs["wavelengths"][:]
             self.mean = hf.attrs[mean_key]
@@ -51,25 +58,19 @@ class H5SpecDataset(torch.utils.data.Dataset):
             self.len = hf[self.split][self.flux_type].shape[0]
             self.n_pixels = hf[self.split][self.flux_type].shape[1]
 
-
+        # if preload is set, load the data into RAM or VRAM
         if self.preload in ("ram", "vram"):
             with h5py.File(self.data_path, "r") as hf:
-                # dump everythin in ram
+                # dump everything in PAGEABLE ram
                 arr = hf[self.split][self.flux_type][:]
             # *contiguous* in memory (easier for ram to handle)
+            # data is in pageable, not pinned, RAM
             data = torch.from_numpy(np.ascontiguousarray(arr)).float()
             if self.preload == "vram":
-                # put on VRAM. non_blocking=True means CPU can start working
-                # on next batch while GPU still working (requires pin_memory =True
-                # in dataloader which allows CPU to send stuff off and start the next)
-                data = data.to(self.device, non_blocking=True)
+                assert self.device != "cpu", "Cannot preload to VRAM if device is CPU"
+                # move to VRAM
+                data = data.to(self.device) # non_blocking is false because data moves in one
             self.data = data
-                
-
-        self.hf = None
-
-        self.redshifts = None
-        self.snr = None
 
     def __len__(self):
 
@@ -78,21 +79,20 @@ class H5SpecDataset(torch.utils.data.Dataset):
     def __getitem__(self, idx):
         
         if self.preload in ("ram", "vram"):
-            # sample, mask
-            return self.data[idx], (self.data[idx] != 0)
+            # get sample, mask from RAM/VRAM
+            sample = self.data[idx]
+            return sample, (sample != 0)
         else:
-            # lazy loading. only open h5 file when start accessing it
-            # only needed for streaming, not preloading
+            # open h5 and retrieve sample, mask
+            # (lazy loading. only open h5 file when start accessing it
+            # only needed for streaming, not preloading)
             if self.hf is None:
                 self.hf = h5py.File(self.data_path, "r")
             sample = torch.from_numpy(self.hf[self.split][self.flux_type][idx])
-            sample_mask = sample != 0
-
-            # make sure sample is float32 (best for Pytorch, also I think what is in the h5)
+            # make sure sample is float32 (best for Pytorch, also I think what is in the updated h5)
             sample = sample.float()
-            sample_mask = sample_mask.bool()
 
-            return sample, sample_mask
+            return sample, (sample != 0)
 
     def _get_redshift(self):
         # CAUTION: only use with a non-shuffled loader
@@ -117,8 +117,7 @@ class H5SpecDataset(torch.utils.data.Dataset):
         return self.snr
 
 
-
-
+        
 
 class SpecDataset(torch.utils.data.Dataset):
     def __init__(self, data):
