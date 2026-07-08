@@ -185,7 +185,7 @@ class VAEAutoencoder(nn.Module):
 		for l in self.encoder_layers:
 			x = self.act_func(l(x))
 
-		return self.encoder_to_latent(x)
+		return self.encoder_to_latent_mean(x)
 
 
 # class CNNAutoencoder(nn.Module):
