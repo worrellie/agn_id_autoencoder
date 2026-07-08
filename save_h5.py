@@ -1,33 +1,13 @@
 
 RND = 42
-
-# from joblib import Parallel, delayed
-# import multiprocessing
-
+import os
 import glob
-# from tokenize import group
 import numpy as np
 from astropy.io import fits
-# import re
-# import joblib
-# import random
-# import sys
-
 from matplotlib import pyplot as plt
-
-# from specutils import Spectrum
-# import astropy.units as u
-# from specutils.manipulation import FluxConservingResampler
-
-# from specutils import SpectralRegion
-
 from sklearn.model_selection import train_test_split
-
 import h5py
-import os
 import random
-# from astropy.table import Table
-
 import warnings
 
 
