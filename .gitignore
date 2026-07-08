@@ -46,4 +46,5 @@ char_plots/
 
 stats_all.csv
 stats_trainval.csv
-all_spectra.h5
+
+all_spectra*.h5
