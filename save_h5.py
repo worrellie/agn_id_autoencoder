@@ -1,33 +1,13 @@
 
 RND = 42
-
-# from joblib import Parallel, delayed
-# import multiprocessing
-
+import os
 import glob
-# from tokenize import group
 import numpy as np
 from astropy.io import fits
-# import re
-# import joblib
-# import random
-# import sys
-
 from matplotlib import pyplot as plt
-
-# from specutils import Spectrum
-# import astropy.units as u
-# from specutils.manipulation import FluxConservingResampler
-
-# from specutils import SpectralRegion
-
 from sklearn.model_selection import train_test_split
-
 import h5py
-import os
 import random
-# from astropy.table import Table
-
 import warnings
 
 
@@ -201,10 +181,13 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                             val = hdr.get(param_name, np.nan)
                             dset[row] = np.nan if val is None else val
 
-                        d_flux_raw[row]       = raw_flux
+                        raw_flux_out = np.where(unmasked, raw_flux, np.nan)
+                        log_scale_out = np.where(unmasked, log_scale_flux, np.nan)
+
+                        d_flux_raw[row]       = raw_flux_out
                         # d_flux_norm_cont[row] = norm_flux_cont
                         # d_flux_norm_med[row]  = norm_flux_med
-                        d_flux_log[row]       = log_scale_flux
+                        d_flux_log[row]       = log_scale_out
 
                         # --- stats LAST: only counted once the row is committed ---
                         if split_name == "train":
