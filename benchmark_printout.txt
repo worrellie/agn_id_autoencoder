@@ -1,0 +1,49 @@
+[sanity] valid-pixel mean=0.003 std=0.911  (expect ~0.0 / ~1.0 if standardized)
+/home/worrellie/Documents/agn_id_autoencoder/benchmark.py:198: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  "final_loss": float(loss),
+============================================================
+mode=none  device=cuda  standard nl1 ls32  bs64
+params           : 1,867,821
+median step      : 10.21 ms
+throughput       : 6,094 samples/s
+peak GPU mem     : 54 MB
+peak host RAM    : 1,183 MB
+est. epoch       : 14.0 s
+est. 150 epochs   : 35.1 min
+final loss       : 1.0065
+appended to      : benchmark_results.jsonl
+============================================================
+[sanity] valid-pixel mean=-0.031 std=1.098  (expect ~0.0 / ~1.0 if standardized)
+/home/worrellie/Documents/agn_id_autoencoder/benchmark.py:198: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  "final_loss": float(loss),
+============================================================
+mode=ram  device=cuda  standard nl1 ls32  bs64
+params           : 1,867,821
+median step      : 6.32 ms
+throughput       : 9,848 samples/s
+peak GPU mem     : 54 MB
+peak host RAM    : 2,869 MB
+est. epoch       : 8.7 s
+est. 150 epochs   : 21.7 min
+final loss       : 1.1970
+appended to      : benchmark_results.jsonl
+============================================================
+[sanity] valid-pixel mean=-0.013 std=0.889  (expect ~0.0 / ~1.0 if standardized)
+/home/worrellie/Documents/agn_id_autoencoder/benchmark.py:198: UserWarning: Converting a tensor with requires_grad=True to a scalar may lead to unexpected behavior.
+Consider using tensor.detach() first. (Triggered internally at /pytorch/torch/csrc/autograd/generated/python_variable_methods.cpp:836.)
+  "final_loss": float(loss),
+============================================================
+mode=vram  device=cuda  standard nl1 ls32  bs64
+params           : 1,867,821
+median step      : 5.28 ms
+throughput       : 11,349 samples/s
+peak GPU mem     : 704 MB
+peak host RAM    : 2,937 MB
+est. epoch       : 7.3 s
+est. 150 epochs   : 18.2 min
+final loss       : 0.8870
+appended to      : benchmark_results.jsonl
+============================================================
+
