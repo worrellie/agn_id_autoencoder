@@ -1,7 +1,7 @@
 program: run_ae.py
 method: bayes
 metric:
-  name: final/best_valid_mse
+  name: final/best_valid_log_mse
   goal: minimize
 early_terminate:
   type: hyperband
@@ -16,7 +16,7 @@ command:
   - python
   - ${program}
   - -f
-  - all_spectra.h5
+  - all_spectra_float32.h5
   - -p
   - autoencoder_sweep_all_data
   # - -s          # enable early stopping

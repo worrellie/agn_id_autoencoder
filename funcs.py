@@ -667,7 +667,7 @@ def _fit_check(losses):
 	A positive gap is normal — every model has one. We only care if it's LARGE."""
 	train = np.asarray(losses["train_total"]) # scaled loss
 	valid = np.asarray(losses["valid_total"]) # scaled loss
-	best  = int(np.argmin(losses["unscaled_valid_mses"]))   # the epoch we actually checkpoint # UNSCALED
+	best  = int(np.argmin(losses["valid_mses"]))   # the epoch we actually checkpoint # 
 
 	gap = float(valid[best] - train[best])                  # valid - train. Positive = normal.
 	rel = gap / max(abs(float(train[best])), 1e-12)         # scale-free -> comparable across runs

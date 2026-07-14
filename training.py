@@ -403,7 +403,7 @@ class Trainer:
 			'model':       model.state_dict(),
 			'epoch':       epoch,                      # WHICH epoch this is
 			'metric':      metric,                     # what it scored
-			'metric_name': 'unscaled_valid_mse',       # and on what
+			'metric_name': 'valid_mse',       # and on what
 		}
 		if optimizer is not None:
 			save_dict['optimizer'] = optimizer.state_dict()
