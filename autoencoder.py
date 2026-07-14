@@ -21,15 +21,15 @@ logger = logging.getLogger(__name__)
 
 
 class StandardAutoencoder(nn.Module):
-	def __init__(self, config, input_size, latent_size, flux_type, activation="ReLU"):
+	def __init__(self, config, input_size, latent_size, activation="ReLU"):
 		super(StandardAutoencoder, self).__init__()
 
 		self.type = "sae"
 
-		self.flux_type = flux_type
+		# self.flux_type = flux_type
 
-		self.mean = None
-		self.std = None
+		# self.mean = None
+		# self.std = None
 
 		self.act_func = getattr(nn, activation)()  # make instance of desired activation function
 
@@ -63,42 +63,43 @@ class StandardAutoencoder(nn.Module):
 
 		self.decoder_to_output = nn.Linear(config[0]["in"], input_size)
 
+
+	def encode(self, x):
+
+		x = self.act_func(self.input_to_encoder(x))
+
+		for l in self.encoder_layers:
+			x = self.act_func(l(x))
+
+		# return self.act_func(self.encoder_to_latent(x))
+		return self.encoder_to_latent(x)
+
+	def decode(self, x):
+
+		x = self.act_func(self.decoder_from_latent(x))
+
+		for l in self.decoder_layers:
+			x = self.act_func(l(x))
+
+		return self.decoder_to_output(x)
+
+
 	def forward(self, x):
 
 		# a forward pass
 
-		x = self.act_func(self.input_to_encoder(x))
+		z = self.encode(x)
 
-		for l in self.encoder_layers:
-			x = self.act_func(l(x))
+		return self.decode(z), None, None
 
-		z = self.act_func(self.encoder_to_latent(x))
-
-		z = self.act_func(self.decoder_from_latent(z))
-
-		for l in self.decoder_layers:
-			z = self.act_func(l(z))
-
-		x_hat = self.decoder_to_output(z)
-
-		return x_hat, None, None
-
-	def encode(self, x):
-		
-		x = self.act_func(self.input_to_encoder(x))
-
-		for l in self.encoder_layers:
-			x = self.act_func(l(x))
-
-		return self.encoder_to_latent(x)
 
 class VAEAutoencoder(nn.Module):
-	def __init__(self, config, input_size, latent_size, flux_type, activation="ReLU"):
+	def __init__(self, config, input_size, latent_size, activation="ReLU"):
 		super(VAEAutoencoder, self).__init__()
 
 		self.type = "vae"
 
-		self.flux_type = flux_type
+		# self.flux_type = flux_type
 
 		self.act_func = getattr(
 			nn, activation
@@ -147,44 +148,51 @@ class VAEAutoencoder(nn.Module):
 
 		self.decoder_to_output = nn.Linear(config[0]["in"], input_size)
 
-	# def encode(self, x):
-	# 	x = self.act_func(self.input_to_encoder(x))
-	# 	for l in self.encoder_layers:
-	# 		x = self.act_func(l(x))
-	# 	return self.encoder_to_latent_mean(x)
+	def encode(self, x):
+		# for tsne/umap
+		h = self._encoder_trunk(x)
+		return self.encoder_to_latent_mean(h)
 
-	def forward(self, x):
-
+	def _encoder_trunk(self, x):
 		x = self.act_func(self.input_to_encoder(x))
-
 		for l in self.encoder_layers:
 			x = self.act_func(l(x))
+		return x
 
-		mu = self.encoder_to_latent_mean(x)
-		logvar = self.encoder_to_latent_logvar(x)
-
-		std = torch.exp(0.5 * logvar)
-		epsilon = torch.randn_like(std)
-		z = mu + std * epsilon  # latent of VAE
-
+	def decode(self, z):
 		z = self.act_func(self.decoder_from_latent(z))
-
 		for l in self.decoder_layers:
 			z = self.act_func(l(z))
+		return self.decoder_to_output(z)
 
-		x_hat = self.decoder_to_output(z)
+	def forward(self, x):
+		h = self._encoder_trunk(x)
+		mu     = self.encoder_to_latent_mean(h)
+		logvar = self.encoder_to_latent_logvar(h)
+		std = torch.exp(0.5 * logvar)
+		z = mu + std * torch.randn_like(std)     # reparameterised sample
+		return self.decode(z), mu, logvar
 
-		return x_hat, mu, logvar
-	
-	def encode(self, x):
-		
-		x = self.act_func(self.input_to_encoder(x))
+def build_model(params, state_dict=None, device = "cpu"):
 
-		for l in self.encoder_layers:
-			x = self.act_func(l(x))
+	# rebuild model from params.json
 
-		return self.encoder_to_latent_mean(x)
+	cls = {
+		"StandardAutoencoder": StandardAutoencoder,
+		"VariationalAutoencoder": VAEAutoencoder,
+	}[params["ae_type"]]
 
+	model = cls(
+		params["config"],
+		params["input_size"],
+		params["latent_size"],
+		activation=params["activation_function"],
+	)
+
+	if state_dict is not None:
+		model.load_state_dict(state_dict)
+
+	return model.to(device).eval()
 
 # class CNNAutoencoder(nn.Module):
 

@@ -77,34 +77,21 @@ class Trainer:
 
 	def train_ae(self, epochs, train_loader, valid_loader=None, verbose=False):
 
+		ds  = train_loader.dataset
 
-		train_mean = train_loader.dataset.mean
-		train_std = train_loader.dataset.std
+		train_mean = ds.mean
+		train_std = ds.std
+		standardize = ds.standardize
+		flux_type = ds.flux_type
 
-		normalize = self.model.normalize
-		flux_type = self.model.flux_type
-		print(flux_type)
+		if valid_loader is not None:
+			assert train_mean == valid_loader.dataset.mean
+			assert standardize == valid_loader.dataset.standardize
 
-		self.model.mean = train_mean
-		self.model.std = train_std
-
-		# normalize = False
 		clip = False
-
-		# if train_mean is not None and train_std is not None:
-		# 	normalize = True
-
-		# # FOR TESTING
-		# normalize = False
-		# clip = False
-		# #############
 
 		if clip:
 			print(f"Applying clipping to input data (clipped beyond -5)")
-		if normalize:
-			print(f"Applying Z-score normalization to input data")
-		if not normalize and not clip:
-			print(f"No clipping or normalization applied")
 
 		self.model.to(self.device)
 		self.best_model = copy.deepcopy(self.model) # so that best model is never None
@@ -116,9 +103,8 @@ class Trainer:
 		valid_mses = []
 		valid_kls = []
 		valid_mses_unscaled = []
-		valid_rel_mses_unscaled= []
+		# valid_rel_mses_unscaled= []
 
-		print(f'norm: {normalize}')
 		print(f'clip: {clip}')
 
 		logger.info("training model...")
@@ -129,6 +115,10 @@ class Trainer:
 		wandb.define_metric("total_loss/*",  step_metric="epoch")
 
 		best_validation = float('inf')
+
+		x0, m0 = train_loader.dataset[0]
+		assert torch.isfinite(x0).all(), "Dataset yielded non-finite values — NaN scrub failed"
+		assert (x0[~m0] == 0).all(),     "Dataset yielded non-zero values at masked pixels"
 
 		for epoch in range(epochs):
 
@@ -141,12 +131,12 @@ class Trainer:
 			valid_mse = 0
 			valid_kl = 0
 			valid_mse_unscaled = 0
-			valid_rel_mse_unscaled = 0 
+			# valid_rel_mse_unscaled = 0
 
 			processed_samples = 0
 
 			first_param = next(self.model.parameters())
-			print(first_param.shape)
+			# print(first_param.shape)
 			logger.info(f"epoch {epoch} first param mean: {first_param.data.mean():.6f}")
 			logger.info(f"epoch {epoch} first x_hat mean: check below")
 
@@ -168,15 +158,15 @@ class Trainer:
 				# print(f"                       std={stded.std():.3f}")
 				#############################################################################################
 
-				if normalize:
-					x = (x - train_mean) / train_std  # normalize data
+				# if normalize:
+				# 	x = (x - train_mean) / train_std  # normalize data
 				if clip:
 					x = torch.clamp(x, min = -5.0)
 
-				x = x * x_mask  # re-set 'gaps'/masked regions as zero
+				  # re-set 'gaps'/masked regions as zero
 
-				x = x.to(self.device)
-				x_mask = x_mask.to(self.device)
+				x = x.to(self.device, non_blocking= True)
+				x_mask = x_mask.to(self.device, non_blocking = True)
 
 				"""
 				consider the case for autocasting: float32 takes up a lot of memory but is very precise.
@@ -200,8 +190,6 @@ class Trainer:
 
 						# stats for *batch*
 						mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
-						print(loss)
-						print(loss.data.mean())
 
 					if self.grad_scaler is not None:
 						self.grad_scaler.scale(loss).backward()  # call backward on scaled loss to create scaled
@@ -220,8 +208,8 @@ class Trainer:
 
 					# stats for *batch*
 					mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
-					print(loss)
-					print(loss.data.mean())
+					# print(loss)
+					# print(loss.data.mean())
 
 					loss.backward()
 
@@ -268,46 +256,46 @@ class Trainer:
 				# dont update weights/ train
 				self.model.eval()
 				with torch.no_grad():
-					first_param = next(self.model.parameters())
-					logger.info(
-						f"epoch {epoch} first param mean: {first_param.data.mean():.6f}"
-					)
-					logger.info(f"epoch {epoch} first x_hat mean: check below")
+					# first_param = next(self.model.parameters())
+					# logger.info(
+					# 	f"epoch {epoch} first param mean: {first_param.data.mean():.6f}"
+					# )
+					# logger.info(f"epoch {epoch} first x_hat mean: check below")
 
 					processed_samples_valid = 0
 
 					# print('normalize for validation')
 
 					for x, x_mask in valid_loader:
-						if normalize:
-							x = (x - train_mean) / train_std  # normalize data
+						# if normalize:
+						# 	x = (x - train_mean) / train_std  # normalize data
 						
-						x = x * x_mask  # re-set 'gaps'/masked regions as zer
+						# x = x * x_mask  # re-set 'gaps'/masked regions as zer
 
-						x = x.to(self.device)
-						x_mask = x_mask.to(self.device)
+						x = x.to(self.device, non_blocking=True)
+						x_mask = x_mask.to(self.device, non_blocking=True)
 
 						x_hat, mu, logvar = self.model(x)
 
-						logger.info(
-							f"valid x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}"
-						)
+						# logger.info(
+						# 	f"valid x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}"
+						# )
 
 						# get unscaled x and xhat and losses
-						x_hat_unscaled = funcs._to_physical_space(x_hat, train_mean, train_std, normalize, flux_type)
-						x_unscaled = funcs._to_physical_space(x, train_mean, train_std, normalize, flux_type)
+						x_hat_unscaled = funcs._to_physical_space(x_hat, train_mean, train_std, standardize, flux_type, mask = x_mask)
+						x_unscaled = funcs._to_physical_space(x, train_mean, train_std, standardize, flux_type, mask = x_mask)
 
 						mse_unscaled, _, _ = funcs._loss_calc_batch(x_hat_unscaled, x_unscaled, x_mask, mu=None, logvar=None, beta=0.0)
-						rel_mse_unscaled = funcs._rel_mse_calc_batch(x_hat_unscaled, x_unscaled, x_mask,)
+						# rel_mse_unscaled = funcs._rel_mse_calc_batch(x_hat_unscaled, x_unscaled, x_mask,)
 
 						valid_mse_unscaled += mse_unscaled.item() * x.size(0)
-						valid_rel_mse_unscaled += rel_mse_unscaled.item() * x.size(0)
+						# valid_rel_mse_unscaled += rel_mse_unscaled.item() * x.size(0)
 						##########
 
 						# get scaled losses
 						mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
-						print(loss)
-						print(loss.data.mean())
+						# print(loss)
+						# print(loss.data.mean())
 
 						# print(x.size(0))
 
@@ -333,8 +321,8 @@ class Trainer:
 					unscaled_epoch_avg_valid_mse = valid_mse_unscaled / processed_samples_valid
 					valid_mses_unscaled.append(unscaled_epoch_avg_valid_mse)
 
-					unscaled_epoch_avg_valid_rel_mse = valid_rel_mse_unscaled / processed_samples_valid
-					valid_rel_mses_unscaled.append(unscaled_epoch_avg_valid_rel_mse)
+					# unscaled_epoch_avg_valid_rel_mse = valid_rel_mse_unscaled / processed_samples_valid
+					# valid_rel_mses_unscaled.append(unscaled_epoch_avg_valid_rel_mse)
 
 				# log in wandb for epoch
 				wandb.log({
@@ -343,7 +331,7 @@ class Trainer:
 					"metrics/valid_mse" : epoch_avg_valid_mse,
 					"metrics/valid_kl" : epoch_avg_valid_kl,
 					"metrics/valid_mse_unscaled" : unscaled_epoch_avg_valid_mse,
-					"metrics/valid_rel_mse_unscaled" : unscaled_epoch_avg_valid_rel_mse,
+					# "metrics/valid_rel_mse_unscaled" : unscaled_epoch_avg_valid_rel_mse,
 
 				})
 
@@ -352,7 +340,8 @@ class Trainer:
 				)
 
 				# metric for best model: unscaled_epoch_avg_valid_mse (absolute unscaled MSE)
-				model_success_metric = unscaled_epoch_avg_valid_mse
+				# model_success_metric = unscaled_epoch_avg_valid_mse
+				model_success_metric = epoch_avg_valid_mse
 				if self.early_stopping is not None:
 					self.early_stopping.check_early_stop(model_success_metric, self.model, epoch )
 					do_checkpoint = self.early_stopping.new_best
@@ -370,18 +359,17 @@ class Trainer:
 					self.best_model = copy.deepcopy(self.model)
 					if not self.test:
 						path_best_model = path.Path(self.test_name, f"{self.test_name}_best_model.pt")
-						self.checkpoint(self.model, path_best_model)
+						self.checkpoint(self.model, path_best_model, epoch=epoch, metric=model_success_metric, optimizer=self.optimizer)
 
 		logger.info("training finished")
 		
 		# when at end of training, save (if not a test)
 		if not self.test:
 			save_path_dict = path.Path(
-				self.test_name, f"{self.test_name}_final_model_state_dict.pt"
-			)  # overwrite is default
+				self.test_name, f"{self.test_name}_final_model_state_dict.pt")  # overwrite is default
 			torch.save(self.model.state_dict(), save_path_dict)
-			save_path_model = path.Path(self.test_name, f"{self.test_name}_final_model.pt")
-			torch.save(self.model, save_path_model)
+			# save_path_model = path.Path(self.test_name, f"{self.test_name}_final_model.pt")
+			# torch.save(self.model, save_path_model)
 
 		# returns the mse, kl and total_loss of  each epoch for training data
 		# and for valiadation returns scaled mse, kl, and total loss as well as
@@ -398,7 +386,7 @@ class Trainer:
 			"valid_kl_raw": valid_kls,
 			#
 			"unscaled_valid_mses" : valid_mses_unscaled,
-			"unscaled_valid_rel_mses" : valid_rel_mses_unscaled,
+			# "unscaled_valid_rel_mses" : valid_rel_mses_unscaled,
 
 		}
 
@@ -410,23 +398,23 @@ class Trainer:
 
 		return self.model, self.best_model, model_losses_per_epoch
 
-	def checkpoint(self, model, filename, optimizer=None):
-
+	def checkpoint(self, model, filename, epoch, metric, optimizer=None):
+		save_dict = {
+			'model':       model.state_dict(),
+			'epoch':       epoch,                      # WHICH epoch this is
+			'metric':      metric,                     # what it scored
+			'metric_name': 'unscaled_valid_mse',       # and on what
+		}
 		if optimizer is not None:
-			save_dict = {'optimizer' : optimizer.state_dict(),
-						 'model' : model.state_dict(),
-						 }
-		else:
-			save_dict = {'model' : model.state_dict()}
-		
+			save_dict['optimizer'] = optimizer.state_dict()
 		torch.save(save_dict, filename)
 
-	def resume(self, model, filename):
-
-		# optimizer state is saved but not yet restored
-		save_dict = torch.load(filename)
-		model.load_state_dict(save_dict['model'])
-
+	# def resume(self, model, filename, optimizer=None):
+	# 	save_dict = torch.load(filename)
+	# 	model.load_state_dict(save_dict['model'])
+	# 	if optimizer is not None and 'optimizer' in save_dict:
+	# 		optimizer.load_state_dict(save_dict['optimizer'])   # ← was silently skipped
+	# 	return save_dict.get('epoch', 0)
 
 class CustomEarlyStopping:
 	def __init__(self, test_params, patience=5, delta=0, test=False, verbose=False):
