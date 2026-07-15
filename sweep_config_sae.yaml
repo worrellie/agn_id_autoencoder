@@ -5,7 +5,7 @@ metric:
   goal: minimize
 early_terminate:
   type: hyperband
-  min_iter: 100    # do first check at 50 epochs
+  min_iter: 100    # do first check at 100 epochs
   eta: 2      # keep top performing third
 run_cap: 50
 
@@ -42,5 +42,5 @@ parameters:
     values: [1, 2, 3]
 
   activation:
-    values: [LeakyReLU]
+    values: [LeakyReLU, ReLU, Tanh]
 
