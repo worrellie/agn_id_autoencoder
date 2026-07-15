@@ -1,0 +1,122 @@
+1h has: 0 sources
+no files found of 1h exposure time
+2h has: 98355 sources
+4h has: 0 sources
+no files found of 4h exposure time
+8h has: 11756 sources
+📦 Writing train group (88088 samples)...
+train: 594 skipped; resizing 88088 -> 87494
+train: dropped 594 — NORM_CON <= 0
+📦 Writing validation group (11011 samples)...
+validation: 87 skipped; resizing 11011 -> 10924
+validation: dropped 87 — NORM_CON <= 0
+📦 Writing test group (11012 samples)...
+test: 82 skipped; resizing 11012 -> 10930
+test: dropped 82 — NORM_CON <= 0
+
+🏁 Successfully compiled all_spectra_float32.h5
+
+📑 Root Attributes:
+  - norm_mean_log: 0.37755492106380384
+  - norm_std_log: 0.726357428797886
+  - raw_mean: 3.606614754765751e-19
+  - raw_std: 7.438287021426418e-19
+  - wavelengths: [ 6472.  6476.  6480. ... 12656. 12660. 12664.]
+
+🌳 File Structure:
+📁 Group: test
+  📊 Dataset: test/ALPHA | Shape: (10930,) | Type: float32
+  📊 Dataset: test/BETA | Shape: (10930,) | Type: float32
+  📊 Dataset: test/DUSTAV | Shape: (10930,) | Type: float32
+  📊 Dataset: test/FORMEDM | Shape: (10930,) | Type: float32
+  📊 Dataset: test/HMAG | Shape: (10930,) | Type: float32
+  📊 Dataset: test/J | Shape: (10930,) | Type: float32
+  📊 Dataset: test/MASSFOR | Shape: (10930,) | Type: float32
+  📊 Dataset: test/MASSWEI | Shape: (10930,) | Type: float32
+  📊 Dataset: test/METALLI | Shape: (10930,) | Type: float32
+  📊 Dataset: test/NORM_CON | Shape: (10930,) | Type: float32
+  📊 Dataset: test/NORM_MED | Shape: (10930,) | Type: float32
+  📊 Dataset: test/NSFR | Shape: (10930,) | Type: float32
+  📊 Dataset: test/REDSHIF | Shape: (10930,) | Type: float32
+  📊 Dataset: test/SFR | Shape: (10930,) | Type: float32
+  📊 Dataset: test/SNR | Shape: (10930,) | Type: float32
+  📊 Dataset: test/SSFR | Shape: (10930,) | Type: float32
+  📊 Dataset: test/STELLAR | Shape: (10930,) | Type: float32
+  📊 Dataset: test/TAU | Shape: (10930,) | Type: float32
+  📊 Dataset: test/TQUENCH | Shape: (10930,) | Type: float32
+  📊 Dataset: test/U | Shape: (10930,) | Type: float32
+  📊 Dataset: test/UVCOLOU | Shape: (10930,) | Type: float32
+  📊 Dataset: test/V | Shape: (10930,) | Type: float32
+  📊 Dataset: test/VJCOLOU | Shape: (10930,) | Type: float32
+  📊 Dataset: test/log_scale_flux | Shape: (10930, 1549) | Type: float32
+  📊 Dataset: test/obj_id | Shape: (10930,) | Type: |S100
+  📊 Dataset: test/raw_flux | Shape: (10930, 1549) | Type: float32
+  📊 Dataset: test/redshift | Shape: (10930,) | Type: float32
+  📊 Dataset: test/skipped_norm_con | Shape: (82,) | Type: |S58
+📁 Group: train
+  📊 Dataset: train/ALPHA | Shape: (87494,) | Type: float32
+  📊 Dataset: train/BETA | Shape: (87494,) | Type: float32
+  📊 Dataset: train/DUSTAV | Shape: (87494,) | Type: float32
+  📊 Dataset: train/FORMEDM | Shape: (87494,) | Type: float32
+  📊 Dataset: train/HMAG | Shape: (87494,) | Type: float32
+  📊 Dataset: train/J | Shape: (87494,) | Type: float32
+  📊 Dataset: train/MASSFOR | Shape: (87494,) | Type: float32
+  📊 Dataset: train/MASSWEI | Shape: (87494,) | Type: float32
+  📊 Dataset: train/METALLI | Shape: (87494,) | Type: float32
+  📊 Dataset: train/NORM_CON | Shape: (87494,) | Type: float32
+  📊 Dataset: train/NORM_MED | Shape: (87494,) | Type: float32
+  📊 Dataset: train/NSFR | Shape: (87494,) | Type: float32
+  📊 Dataset: train/REDSHIF | Shape: (87494,) | Type: float32
+  📊 Dataset: train/SFR | Shape: (87494,) | Type: float32
+  📊 Dataset: train/SNR | Shape: (87494,) | Type: float32
+  📊 Dataset: train/SSFR | Shape: (87494,) | Type: float32
+  📊 Dataset: train/STELLAR | Shape: (87494,) | Type: float32
+  📊 Dataset: train/TAU | Shape: (87494,) | Type: float32
+  📊 Dataset: train/TQUENCH | Shape: (87494,) | Type: float32
+  📊 Dataset: train/U | Shape: (87494,) | Type: float32
+  📊 Dataset: train/UVCOLOU | Shape: (87494,) | Type: float32
+  📊 Dataset: train/V | Shape: (87494,) | Type: float32
+  📊 Dataset: train/VJCOLOU | Shape: (87494,) | Type: float32
+  📊 Dataset: train/log_scale_flux | Shape: (87494, 1549) | Type: float32
+  📊 Dataset: train/obj_id | Shape: (87494,) | Type: |S100
+  📊 Dataset: train/raw_flux | Shape: (87494, 1549) | Type: float32
+  📊 Dataset: train/redshift | Shape: (87494,) | Type: float32
+  📊 Dataset: train/skipped_norm_con | Shape: (594,) | Type: |S58
+📁 Group: validation
+  📊 Dataset: validation/ALPHA | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/BETA | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/DUSTAV | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/FORMEDM | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/HMAG | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/J | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/MASSFOR | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/MASSWEI | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/METALLI | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/NORM_CON | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/NORM_MED | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/NSFR | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/REDSHIF | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/SFR | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/SNR | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/SSFR | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/STELLAR | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/TAU | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/TQUENCH | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/U | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/UVCOLOU | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/V | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/VJCOLOU | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/log_scale_flux | Shape: (10924, 1549) | Type: float32
+  📊 Dataset: validation/obj_id | Shape: (10924,) | Type: |S100
+  📊 Dataset: validation/raw_flux | Shape: (10924, 1549) | Type: float32
+  📊 Dataset: validation/redshift | Shape: (10924,) | Type: float32
+  📊 Dataset: validation/skipped_norm_con | Shape: (87,) | Type: |S58
+
+---------------------------------------------
+
+--- TRAIN (Index 12928) ---
+ID: cosmos_bagpipes_660369_2h_z1.0971_noisy_deZ_rebinned.fits
+--- VALIDATION (Index 10415) ---
+ID: cosmos_bagpipes_1447083_8h_z1.2738_noisy_deZ_rebinned.fits
+--- TEST (Index 2147) ---
+ID: cosmos_bagpipes_973837_2h_z0.9345_noisy_deZ_rebinned.fits
