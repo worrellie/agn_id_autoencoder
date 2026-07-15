@@ -20,7 +20,6 @@ command:
   - -p
   - autoencoder_sweep_all_data
   - -n
-  # - -s          # enable early stopping
 
 parameters:
   epochs:
