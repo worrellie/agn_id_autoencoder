@@ -137,8 +137,8 @@ class Trainer:
 
 			first_param = next(self.model.parameters())
 			# print(first_param.shape)
-			logger.info(f"epoch {epoch} first param mean: {first_param.data.mean():.6f}")
-			logger.info(f"epoch {epoch} first x_hat mean: check below")
+			# logger.info(f"epoch {epoch} first param mean: {first_param.data.mean():.6f}")
+			# logger.info(f"epoch {epoch} first x_hat mean: check below")
 
 			all_vals = []
 			for x, x_mask in train_loader:
@@ -186,7 +186,7 @@ class Trainer:
 					with self.get_autocast_context():
 
 						x_hat, mu, logvar = self.model(x)  # batch prediction. note: only VAE will output non-None mu/var
-						logger.info(f"train x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}")
+						# logger.info(f"train x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}")
 
 						# stats for *batch*
 						mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
@@ -204,7 +204,7 @@ class Trainer:
 				else:
 
 					x_hat, mu, logvar = self.model(x)  # batch prediction. note: only VAE will output non-None mu/var
-					logger.info(f"train x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}")
+					# logger.info(f"train x_hat mean: {x_hat.mean().item():.6f}, x mean: {x.mean().item():.6f}")
 
 					# stats for *batch*
 					mse, kl, loss = funcs._loss_calc_batch(x_hat, x, x_mask, mu=mu, logvar=logvar, beta=self.beta)  # 'mean' gives loss per sample for batch
