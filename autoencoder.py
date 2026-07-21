@@ -169,6 +169,10 @@ class VAEAutoencoder(nn.Module):
 		h = self._encoder_trunk(x)
 		mu     = self.encoder_to_latent_mean(h)
 		logvar = self.encoder_to_latent_logvar(h)
+
+		# clamp logvar to avoid nans
+		logvar = torch.clamp(logvar, min=-10.0, max=10.0)
+
 		std = torch.exp(0.5 * logvar)
 		z = mu + std * torch.randn_like(std)     # reparameterised sample
 		return self.decode(z), mu, logvar
