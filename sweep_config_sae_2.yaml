@@ -1,0 +1,47 @@
+program: run_ae.py
+method: bayes
+metric:
+  name: final/best_valid_log_mse
+  goal: minimize
+early_terminate:
+  type: hyperband
+  min_iter: 100    # do first check at 100 epochs
+  eta: 2      # keep top performing half
+run_cap: 50
+
+# Fixed params passed as CLI args (not swept).
+# Adjust these for your data and cluster setup.
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -f
+  - all_spectra_float32.h5
+  - -p
+  - autoencoder_sweep_all_data_SAE
+  - -n
+  - --sae
+
+parameters:
+  epochs:
+    values: [300]
+
+  latent_size:
+    values: [256, 512, 700]
+
+  learn_rate:
+    distribution: log_uniform_values
+    min: 1.0e-5
+    max: 1.0e-4
+
+  weight_decay:
+    distribution: log_uniform_values
+    min: 1.0e-6
+    max: 1.0e-5
+
+  n_layers:
+    values: [1, 2]
+
+  activation:
+    values: [LeakyReLU, ReLU, Tanh]
+
