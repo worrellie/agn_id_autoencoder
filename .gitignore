@@ -48,3 +48,6 @@ stats_all.csv
 stats_trainval.csv
 
 all_spectra*.h5
+
+sae_checklist*
+sae_sweep*
