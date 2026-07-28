@@ -16,12 +16,14 @@ import pickle as pkl
 from torch.utils.data import Subset
 import json
 
+from sklearn.decomposition import PCA   
+
 from sklearn.manifold import TSNE
 try:
-    import umap
-    _UMAP_AVAILABLE = True
+	import umap
+	_UMAP_AVAILABLE = True
 except ImportError:
-    _UMAP_AVAILABLE = False
+	_UMAP_AVAILABLE = False
 
 import wandb
 
@@ -44,7 +46,7 @@ def plot_loss_epoch_avg(model_losses, test_params, test=False):
 	train_kl = model_losses["train_kl_raw"]
 	valid_kl = model_losses["valid_kl_raw"]
 
-	epochs = range(1, len(train_loss) + 1)
+	epochs = range(0, len(train_loss))
 
 	plt.style.use("fivethirtyeight")
 	fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(24, 6))
@@ -116,20 +118,28 @@ def plot_dists(train_outputs, valid_outputs, test_params, test=False):
 
 	test_name = test_params["test_name"]
 
-	train_l_scaled = np.array([o["loss_scaled"] for o in train_outputs])
-	valid_l_scaled = np.array([o["loss_scaled"] for o in valid_outputs])
+	# train_l_scaled = np.array([o["loss_scaled"] for o in train_outputs])
+	# valid_l_scaled = np.array([o["loss_scaled"] for o in valid_outputs])
 
-	train_l_unscaled = np.array([o["loss_unscaled"] for o in train_outputs])
-	valid_l_unscaled = np.array([o["loss_unscaled"] for o in valid_outputs])
+	# train_l_unscaled = np.array([o["loss_unscaled"] for o in train_outputs])
+	# valid_l_unscaled = np.array([o["loss_unscaled"] for o in valid_outputs])
 
-	train_l_rel = np.array([o["rel_loss"] for o in train_outputs])
-	valid_l_rel = np.array([o["rel_loss"] for o in valid_outputs])
+	# # train_l_rel = np.array([o["rel_loss"] for o in train_outputs])
+	# # valid_l_rel = np.array([o["rel_loss"] for o in valid_outputs])
 
-	fig, axes = plt.subplots(1, 3, figsize=(24, 4))
+	# fig, axes = plt.subplots(1, 3, figsize=(24, 4))
+
+	train_l_scaled = train_outputs["loss_scaled"]
+	valid_l_scaled = valid_outputs["loss_scaled"]
+
+	train_l_unscaled = train_outputs["loss_unscaled"]
+	valid_l_unscaled = valid_outputs["loss_unscaled"]
+
+	fig, axes = plt.subplots(1, 2, figsize=(16, 4))
 
 	_plot_dist(train_l_scaled, valid_l_scaled, axes[0], title="Loss Distribution (Scaled Space)")
 	_plot_dist(train_l_unscaled, valid_l_unscaled,axes[1], title="Loss Distribution (Unscaled Space)")
-	_plot_dist(train_l_rel, valid_l_rel,axes[2], title="Loss Distribution (Relative)")
+	# _plot_dist(train_l_rel, valid_l_rel,axes[2], title="Loss Distribution (Relative)")
 
 	plt.tight_layout()
 
@@ -159,79 +169,138 @@ def _plot_dist(train_losses, valid_losses, ax, title="Loss Distribution"):
 
 	return ax
 
+# def plot_examples(outputs, l, test_params, test=False):
+
+# 	test_name = test_params["test_name"]
+
+# 	all_losses_scaled = np.array([o["loss_scaled"] for o in outputs])
+
+# 	all_losses_unscaled = np.array([o["loss_unscaled"] for o in outputs])
+
+# 	# all_rel_losses = np.array([o["rel_loss"] for o in outputs])
+
+# 	targets_scaled = {
+# 	"min":  np.min(all_losses_scaled),
+# 	"25th": np.percentile(all_losses_scaled, 25),
+# 	"mean": np.mean(all_losses_scaled),
+# 	"75th": np.percentile(all_losses_scaled, 75),
+# 	"max":  np.max(all_losses_scaled),
+# 	}
+
+# 	targets_unscaled = {
+# 	"min":  np.min(all_losses_unscaled),
+# 	"25th": np.percentile(all_losses_unscaled, 25),
+# 	"mean": np.mean(all_losses_unscaled),
+# 	"75th": np.percentile(all_losses_unscaled, 75),
+# 	"max":  np.max(all_losses_unscaled),
+# 	}
+
+# 	# targets_rel = {
+# 	# "min":  np.min(all_rel_losses),
+# 	# "25th": np.percentile(all_rel_losses, 25),
+# 	# "mean": np.mean(all_rel_losses),
+# 	# "75th": np.percentile(all_rel_losses, 75),
+# 	# "max":  np.max(all_rel_losses),
+# 	# }
+
+# 	# examples
+# 	examples_scaled = [dict(outputs[int(np.argmin(np.abs(all_losses_scaled - t)))], label=lbl) for lbl, t in targets_scaled.items()]
+# 	examples_unscaled = [dict(outputs[int(np.argmin(np.abs(all_losses_unscaled - t)))], label=lbl) for lbl, t in targets_unscaled.items()]
+# 	# examples_rel = [dict(outputs[int(np.argmin(np.abs(all_rel_losses - t)))], label=lbl) for lbl, t in targets_rel.items()]
+
+# 	plot_configs = [
+# 	("scaled", examples_scaled, all_losses_scaled,   "loss_scaled"),
+# 	("unscaled", examples_unscaled, all_losses_unscaled, "loss_unscaled"),
+# 	# ("rel", examples_rel, all_rel_losses, "rel_loss"),
+# 	]
+
+# 	figs = {}
+# 	for space, examples, _, loss_key in plot_configs:
+# 		fig, axes = plt.subplots(5, 2, figsize=(16, 20))
+# 		fig.suptitle(
+# 			f"{space.upper()} — latent: {test_params['latent_size']}, "
+# 			f"{test_params['activation_function']}, epochs: {test_params['max_epochs']}"
+# 		)
+
+# 		og_key    = "original_scaled"   if space == "scaled" else \
+# 					"original_unscaled" if space == "unscaled" else \
+# 					"original_unscaled"
+# 		recon_key = "recon_scaled"      if space == "scaled" else \
+# 					"recon_unscaled"    if space == "unscaled" else \
+# 					"recon_unscaled"
+
+# 		for ax_row, ex in zip(axes, examples):
+# 			ax_fit, ax_res = ax_row
+# 			og    = np.array(ex[og_key],    dtype=float)
+# 			recon = np.array(ex[recon_key], dtype=float)
+# 			mask  = np.array(ex["mask"],    dtype=bool)
+
+# 			og[~mask]    = np.nan
+# 			recon[~mask] = np.nan
+# 			resid = og - recon
+
+# 			ax_fit.step(l, og, color="black", lw=1.5, alpha=0.7, where="mid", label="Original")
+# 			ax_fit.step(l, recon, color="red",   lw=1.0,            where="mid", label="Reconstructed")
+# 			ax_fit.set_title(f"{ex['label']},  {loss_key}: {ex[loss_key]:.5f}")
+# 			ax_fit.legend(fontsize=8)
+# 			ax_fit.set_ylabel("Flux")
+
+# 			ax_res.scatter(l, resid, color="gray", s=2)
+# 			ax_res.axhline(0, color="black", lw=0.8, ls=":")
+# 			ax_res.set_ylabel("Residual")
+# 			ax_res.set_xlabel("Wavelength")
+
+# 		plt.tight_layout()
+# 		figs[space] = fig
+
+# 		if not test:
+# 			pth_fig = path.Path(test_name, f"{test_name}_recon_{space}.png")
+# 			pth_obj = path.Path(test_name, f"{test_name}_recon_{space}.pkl")
+# 			fig.savefig(pth_fig)
+# 			with open(pth_obj, "wb") as o:
+# 				pkl.dump(fig, o)
+# 		else:
+# 			plt.show()
+
+# 	scaled_fig = figs['scaled']
+# 	unscaled_fig = figs['unscaled']
+# 	# rel_fig = figs['rel']
+
+# 	return scaled_fig, unscaled_fig
+
 def plot_examples(outputs, l, test_params, test=False):
-
+	"""
+	outputs: dict from funcs.get_predictions.
+	Uses outputs["examples"][space] — a list of 5 dicts with numpy arrays,
+	NOT the full 110k-spectrum dump (that was ~32 GB of Python floats).
+	"""
 	test_name = test_params["test_name"]
-
-	all_losses_scaled = np.array([o["loss_scaled"] for o in outputs])
-
-	all_losses_unscaled = np.array([o["loss_unscaled"] for o in outputs])
-
-	all_rel_losses = np.array([o["rel_loss"] for o in outputs])
-
-	targets_scaled = {
-	"min":  np.min(all_losses_scaled),
-	"25th": np.percentile(all_losses_scaled, 25),
-	"mean": np.mean(all_losses_scaled),
-	"75th": np.percentile(all_losses_scaled, 75),
-	"max":  np.max(all_losses_scaled),
-	}
-
-	targets_unscaled = {
-	"min":  np.min(all_losses_unscaled),
-	"25th": np.percentile(all_losses_unscaled, 25),
-	"mean": np.mean(all_losses_unscaled),
-	"75th": np.percentile(all_losses_unscaled, 75),
-	"max":  np.max(all_losses_unscaled),
-	}
-
-	targets_rel = {
-	"min":  np.min(all_rel_losses),
-	"25th": np.percentile(all_rel_losses, 25),
-	"mean": np.mean(all_rel_losses),
-	"75th": np.percentile(all_rel_losses, 75),
-	"max":  np.max(all_rel_losses),
-	}
-
-	# examples
-	examples_scaled = [dict(outputs[int(np.argmin(np.abs(all_losses_scaled - t)))], label=lbl) for lbl, t in targets_scaled.items()]
-	examples_unscaled = [dict(outputs[int(np.argmin(np.abs(all_losses_unscaled - t)))], label=lbl) for lbl, t in targets_unscaled.items()]
-	examples_rel = [dict(outputs[int(np.argmin(np.abs(all_rel_losses - t)))], label=lbl) for lbl, t in targets_rel.items()]
-
-	plot_configs = [
-	("scaled", examples_scaled, all_losses_scaled,   "loss_scaled"),
-	("unscaled", examples_unscaled, all_losses_unscaled, "loss_unscaled"),
-	("rel", examples_rel, all_rel_losses, "rel_loss"),
-	]
+	split = outputs["split"]
 
 	figs = {}
-	for space, examples, _, loss_key in plot_configs:
+	for space in ("scaled", "unscaled"):
+		examples = outputs["examples"][space]
+
 		fig, axes = plt.subplots(5, 2, figsize=(16, 20))
 		fig.suptitle(
 			f"{space.upper()} — latent: {test_params['latent_size']}, "
 			f"{test_params['activation_function']}, epochs: {test_params['max_epochs']}"
 		)
 
-		og_key    = "original_scaled"   if space == "scaled" else \
-					"original_unscaled" if space == "unscaled" else \
-					"original_unscaled"
-		recon_key = "recon_scaled"      if space == "scaled" else \
-					"recon_unscaled"    if space == "unscaled" else \
-					"recon_unscaled"
-
 		for ax_row, ex in zip(axes, examples):
 			ax_fit, ax_res = ax_row
-			og    = np.array(ex[og_key],    dtype=float)
-			recon = np.array(ex[recon_key], dtype=float)
-			mask  = np.array(ex["mask"],    dtype=bool)
 
-			og[~mask]    = np.nan
+			og    = ex["og"].astype(float)       # already numpy — no np.array(list) conversion
+			recon = ex["recon"].astype(float)
+			mask  = ex["mask"].astype(bool)
+
+			og[~mask]    = np.nan                # gaps break the line, as before
 			recon[~mask] = np.nan
 			resid = og - recon
 
-			ax_fit.step(l, og, color="black", lw=1.5, alpha=0.7, where="mid", label="Original")
+			ax_fit.step(l, og,    color="black", lw=1.5, alpha=0.7, where="mid", label="Original")
 			ax_fit.step(l, recon, color="red",   lw=1.0,            where="mid", label="Reconstructed")
-			ax_fit.set_title(f"{ex['label']},  {loss_key}: {ex[loss_key]:.5f}")
+			ax_fit.set_title(f"{ex['label']},  loss: {ex['loss']:.5f}")
 			ax_fit.legend(fontsize=8)
 			ax_fit.set_ylabel("Flux")
 
@@ -244,19 +313,13 @@ def plot_examples(outputs, l, test_params, test=False):
 		figs[space] = fig
 
 		if not test:
-			pth_fig = path.Path(test_name, f"{test_name}_recon_{space}.png")
-			pth_obj = path.Path(test_name, f"{test_name}_recon_{space}.pkl")
-			fig.savefig(pth_fig)
-			with open(pth_obj, "wb") as o:
+			fig.savefig(path.Path(test_name, f"{test_name}_{split}_recon_{space}.png"))
+			with open(path.Path(test_name, f"{test_name}_{split}_recon_{space}.pkl"), "wb") as o:
 				pkl.dump(fig, o)
 		else:
 			plt.show()
 
-	scaled_fig = figs['scaled']
-	unscaled_fig = figs['unscaled']
-	rel_fig = figs['rel']
-
-	return scaled_fig, unscaled_fig, rel_fig
+	return figs["scaled"], figs["unscaled"]
 
 def plot_log_vs_unscaled_mse(model_losses, test_params, test=False):
 
@@ -300,92 +363,184 @@ def plot_log_vs_unscaled_mse(model_losses, test_params, test=False):
 
 	return fig
 
-
-def plot_latent_space(latent_data, color_by, color_label=None,
-                      method="tsne", test_params=None, test=False):
+def embed_latent(latent, method="tsne", n_max=15000, pca_dims=50, seed=42):
 	"""
-	Project the latent space to 2D and colour points by a chosen parameter.
+	Fit ONE 2D embedding of the latent space.
 
-	Parameters
-	----------
-	latent_data : dict
-	    Output of funcs.get_latent_space(). Must contain key "latent" (N, D).
-	    May also contain "redshift", "snr", "loss_scaled", "loss_unscaled", "rel_loss".
-	color_by : str or np.ndarray
-	    Key in latent_data to use as the colour axis, or a raw array of length N.
-	color_label : str, optional
-	    Colorbar label. Defaults to color_by if a string was given.
-	method : {"tsne", "umap", "both"}
-	    Dimensionality reduction method(s) to use.
-	test_params : dict, optional
-	    Must contain "test_name" when test=False so plots can be saved.
-	test : bool
-	    If True, display interactively instead of saving.
+	Returns (emb, idx):
+	  emb : (n, 2) coordinates
+	  idx : indices of the rows that were embedded. Callers MUST index their
+			colour arrays with idx, or point i gets spectrum j's colour.
 	"""
+	latent = np.asarray(latent, dtype=np.float64)
 
-	latent = latent_data["latent"]
-
-	if isinstance(color_by, str):
-		if color_label is None:
-			color_label = color_by
-		c = latent_data.get(color_by)
-		if c is None:
-			raise ValueError(f"color_by='{color_by}' not found in latent_data. "
-			                 f"Available keys: {list(latent_data.keys())}")
-		c = np.array(c, dtype=float)
-	else:
-		c = np.array(color_by, dtype=float)
-		if color_label is None:
-			color_label = "value"
-
-	if method == "both" and not _UMAP_AVAILABLE:
-		raise ImportError("umap-learn is not installed. Install it with: pip install umap-learn")
 	if method == "umap" and not _UMAP_AVAILABLE:
-		raise ImportError("umap-learn is not installed. Install it with: pip install umap-learn")
+		raise ImportError("umap-learn not installed: pip install umap-learn")
 
-	# print(len(latent))
-	# print(min(30, len(latent) - 1))
-	# print(latent)
+	# subsample: Barnes-Hut t-SNE on ~90k points takes hours and plots as an ink blot
+	rng = np.random.default_rng(seed)
+	n = len(latent)
+	idx = np.sort(rng.choice(n, size=n_max, replace=False)) if n > n_max else np.arange(n)
+	z = latent[idx]
 
-	def _reduce_tsne(z):
-		return TSNE(n_components=2, perplexity=min(30, len(z) - 1)).fit_transform(z)
+	# z-score each latent dim. t-SNE/UMAP consume EUCLIDEAN distance, so without this
+	# the highest-variance dim dominates the geometry for reasons of scale, not structure.
+	z = (z - z.mean(axis=0)) / (z.std(axis=0) + 1e-8)
 
-	def _reduce_umap(z):
-		reducer = umap.UMAP(n_components=2,)
-		return reducer.fit_transform(z)
+	# PCA first: denoises and cuts the neighbour search cost a lot. Standard practice.
+	if z.shape[1] > pca_dims:
+		z = PCA(n_components=pca_dims, random_state=seed).fit_transform(z)
+
+	if method == "tsne":
+		emb = TSNE(
+			n_components=2,
+			perplexity=min(30, max(5, len(z) - 1)),
+			init="pca",              # global structure is meaningful; random init destroys it
+			learning_rate="auto",
+			random_state=seed,       # without this your plots are irreproducible run-to-run
+		).fit_transform(z)
+	elif method == "umap":
+		emb = umap.UMAP(
+			n_components=2, n_neighbors=30, min_dist=0.1, random_state=seed,
+		).fit_transform(z)
+	else:
+		raise ValueError(f"method must be 'tsne' or 'umap', got {method!r}")
+
+	return emb, idx
+
+
+def plot_latent_panels(latent_data, color_params, method, test_params, test=False):
+	"""
+	ONE embedding, N colour panels — all panels share the SAME coordinates,
+	so a point in the top-left of one panel is the same spectrum in all of them.
+
+	(The old plot_latent_space refit t-SNE per colour, giving a different layout
+	each time. Panels could not be cross-referenced.)
+	"""
+	emb, idx = embed_latent(latent_data["latent"], method=method)
+
+	keys = [(k, lbl) for k, lbl in color_params if latent_data.get(k) is not None]
+	if not keys:
+		raise ValueError(f"no usable colour keys. available: {list(latent_data)}")
 
 	plt.style.use("fivethirtyeight")
+	fig, axes = plt.subplots(1, len(keys), figsize=(7 * len(keys), 6), squeeze=False)
 
-	if method == "both":
-		fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
-		axes_methods = [(ax1, "t-SNE", _reduce_tsne), (ax2, "UMAP", _reduce_umap)]
-	else:
-		fig, ax = plt.subplots(figsize=(9, 7))
-		reducer = _reduce_tsne if method == "tsne" else _reduce_umap
-		label = "t-SNE" if method == "tsne" else "UMAP"
-		axes_methods = [(ax, label, reducer)]
+	for ax, (k, lbl) in zip(axes[0], keys):
+		c = np.asarray(latent_data[k], dtype=float)[idx]     # <-- align to the subsample
 
-	for ax, label, reducer in axes_methods:
-		embedding = reducer(latent)
-		sc = ax.scatter(embedding[:, 0], embedding[:, 1],
-		                c=c, cmap="viridis", s=4, alpha=0.6, rasterized=True)
-		plt.colorbar(sc, ax=ax, label=color_label)
-		ax.set_title(f"Latent space — {label}")
-		ax.set_xlabel(f"{label} 1")
-		ax.set_ylabel(f"{label} 2")
+		# percentile clip: a single outlier otherwise flattens the whole colourmap
+		# to one shade, hiding exactly the structure you're looking for.
+		vmin, vmax = np.nanpercentile(c, [2, 98])
 
+		sc = ax.scatter(emb[:, 0], emb[:, 1], c=c, cmap="viridis", s=4,
+						alpha=0.6, vmin=vmin, vmax=vmax, rasterized=True)
+		plt.colorbar(sc, ax=ax, label=lbl)
+		ax.set_title(lbl)
+		ax.set_xlabel(f"{method} 1")
+		ax.set_ylabel(f"{method} 2")
+
+	fig.suptitle(f"Latent space — {method.upper()} (n={len(idx)} of {len(latent_data['latent'])})")
 	plt.tight_layout()
 
-	figs = {}
-	if not test and test_params is not None:
-		test_name = test_params["test_name"]
-		stem = f"{test_name}_latent_{method}_{color_label.replace(' ', '_')}"
-		pth_fig = path.Path(test_name, f"{stem}.png")
-		pth_obj = path.Path(test_name, f"{stem}.pkl")
-		fig.savefig(pth_fig, dpi=150)
-		with open(pth_obj, "wb") as o:
-			pkl.dump(fig, o)
-	else:
+	if test:
 		plt.show()
+		return fig
+
+	test_name = test_params["test_name"]
+	stem = f"{test_name}_{latent_data['split']}_latent_{method}"
+	fig.savefig(path.Path(test_name, f"{stem}.png"), dpi=150)
+	with open(path.Path(test_name, f"{stem}.pkl"), "wb") as o:
+		pkl.dump(fig, o)
 
 	return fig
+
+
+# def plot_latent_space(latent_data, color_by, color_label=None,
+# 					  method="tsne", test_params=None, test=False):
+# 	"""
+# 	Project the latent space to 2D and colour points by a chosen parameter.
+
+# 	Parameters
+# 	----------
+# 	latent_data : dict
+# 		Output of funcs.get_latent_space(). Must contain key "latent" (N, D).
+# 		May also contain "redshift", "snr", "loss_scaled", "loss_unscaled", "rel_loss".
+# 	color_by : str or np.ndarray
+# 		Key in latent_data to use as the colour axis, or a raw array of length N.
+# 	color_label : str, optional
+# 		Colorbar label. Defaults to color_by if a string was given.
+# 	method : {"tsne", "umap", "both"}
+# 		Dimensionality reduction method(s) to use.
+# 	test_params : dict, optional
+# 		Must contain "test_name" when test=False so plots can be saved.
+# 	test : bool
+# 		If True, display interactively instead of saving.
+# 	"""
+
+# 	latent = latent_data["latent"]
+
+# 	if isinstance(color_by, str):
+# 		if color_label is None:
+# 			color_label = color_by
+# 		c = latent_data.get(color_by)
+# 		if c is None:
+# 			raise ValueError(f"color_by='{color_by}' not found in latent_data. "
+# 							 f"Available keys: {list(latent_data.keys())}")
+# 		c = np.array(c, dtype=float)
+# 	else:
+# 		c = np.array(color_by, dtype=float)
+# 		if color_label is None:
+# 			color_label = "value"
+
+# 	if method == "both" and not _UMAP_AVAILABLE:
+# 		raise ImportError("umap-learn is not installed. Install it with: pip install umap-learn")
+# 	if method == "umap" and not _UMAP_AVAILABLE:
+# 		raise ImportError("umap-learn is not installed. Install it with: pip install umap-learn")
+
+# 	# print(len(latent))
+# 	# print(min(30, len(latent) - 1))
+# 	# print(latent)
+
+# 	def _reduce_tsne(z):
+# 		return TSNE(n_components=2, perplexity=min(30, len(z) - 1)).fit_transform(z)
+
+# 	def _reduce_umap(z):
+# 		reducer = umap.UMAP(n_components=2,)
+# 		return reducer.fit_transform(z)
+
+# 	plt.style.use("fivethirtyeight")
+
+# 	if method == "both":
+# 		fig, (ax1, ax2) = plt.subplots(1, 2, figsize=(18, 7))
+# 		axes_methods = [(ax1, "t-SNE", _reduce_tsne), (ax2, "UMAP", _reduce_umap)]
+# 	else:
+# 		fig, ax = plt.subplots(figsize=(9, 7))
+# 		reducer = _reduce_tsne if method == "tsne" else _reduce_umap
+# 		label = "t-SNE" if method == "tsne" else "UMAP"
+# 		axes_methods = [(ax, label, reducer)]
+
+# 	for ax, label, reducer in axes_methods:
+# 		embedding = reducer(latent)
+# 		sc = ax.scatter(embedding[:, 0], embedding[:, 1],
+# 						c=c, cmap="viridis", s=4, alpha=0.6, rasterized=True)
+# 		plt.colorbar(sc, ax=ax, label=color_label)
+# 		ax.set_title(f"Latent space — {label}")
+# 		ax.set_xlabel(f"{label} 1")
+# 		ax.set_ylabel(f"{label} 2")
+
+# 	plt.tight_layout()
+
+# 	figs = {}
+# 	if not test and test_params is not None:
+# 		test_name = test_params["test_name"]
+# 		stem = f"{test_name}_latent_{method}_{color_label.replace(' ', '_')}"
+# 		pth_fig = path.Path(test_name, f"{stem}.png")
+# 		pth_obj = path.Path(test_name, f"{stem}.pkl")
+# 		fig.savefig(pth_fig, dpi=150)
+# 		with open(pth_obj, "wb") as o:
+# 			pkl.dump(fig, o)
+# 	else:
+# 		plt.show()
+
+# 	return fig

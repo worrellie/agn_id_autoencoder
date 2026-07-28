@@ -27,20 +27,20 @@ parameters:
     values: [300]
 
   latent_size:
-    values: [2, 16, 32, 64, 128, 256]
+    values: [256, 512, 700]
 
   learn_rate:
     distribution: log_uniform_values
-    min: 1.0e-6
-    max: 1.0e-3
+    min: 1.0e-5
+    max: 1.0e-4
 
   weight_decay:
     distribution: log_uniform_values
-    min: 1.0e-8
-    max: 1.0e-4
+    min: 1.0e-6
+    max: 1.0e-5
 
   n_layers:
-    values: [1, 2, 3]
+    values: [1, 2]
 
   activation:
     values: [LeakyReLU, ReLU, Tanh]

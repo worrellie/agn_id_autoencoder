@@ -136,6 +136,7 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
 
             row = 0           # write position: advances ONLY on success
             skipped = []      # audit trail of files that errored
+            skipped_norm_cont_negative = []
 
             for f in split_list:
                 try:
@@ -154,17 +155,31 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                             norm_factor_median = float(norm_factor_median)
                         except (TypeError, ValueError):
                             norm_factor_median = None
+                        
+                        # skip spec if cont region mean is negative
+                        if (norm_factor_continuum is None
+                                or not np.isfinite(norm_factor_continuum)
+                                or norm_factor_continuum <= 0):
+                            skipped_norm_cont_negative.append(os.path.basename(f))
+                            continue        # row NOT advanced; stats NOT accumulated
 
-                        if (norm_factor_continuum is None or norm_factor_continuum == 0
-                                or np.isnan(norm_factor_continuum)):
-                            warnings.warn(f"Invalid NORM_CON ({norm_factor_continuum}) in "
-                                          f"{os.path.basename(f)}. Defaulting to 1.0.")
-                            norm_factor_continuum = 1.0
-                        if (norm_factor_median is None or norm_factor_median == 0
-                                or np.isnan(norm_factor_median)):
-                            warnings.warn(f"Invalid NORM_MED ({norm_factor_median}) in "
-                                          f"{os.path.basename(f)}. Defaulting to 1.0.")
-                            norm_factor_median = 1.0
+                        # NORM_MED is metadata only (norm_flux_med is no longer computed),
+                        # so an invalid value is recorded as NaN rather than being fabricated.
+                        if (norm_factor_median is None
+                                or not np.isfinite(norm_factor_median)
+                                or norm_factor_median <= 0):
+                            norm_factor_median = np.nan
+
+                        # if (norm_factor_continuum is None or norm_factor_continuum == 0
+                        #         or np.isnan(norm_factor_continuum)):
+                        #     warnings.warn(f"Invalid NORM_CON ({norm_factor_continuum}) in "
+                        #                   f"{os.path.basename(f)}. Defaulting to 1.0.")
+                        #     norm_factor_continuum = 1.0
+                        # if (norm_factor_median is None or norm_factor_median == 0
+                        #         or np.isnan(norm_factor_median)):
+                        #     warnings.warn(f"Invalid NORM_MED ({norm_factor_median}) in "
+                        #                   f"{os.path.basename(f)}. Defaulting to 1.0.")
+                        #     norm_factor_median = 1.0
 
                         norm_flux_cont = raw_flux / norm_factor_continuum
                         # norm_flux_med  = raw_flux / norm_factor_median
@@ -221,19 +236,22 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                     # row NOT advanced -> no hole
 
             # trim the over-allocated tail left by any skips
-            # if row < n_samples:
-            #     print(f"{split_name}: {n_samples - row} skipped; resizing {n_samples} -> {row}")
-            #     for dset in [d_flux_log, d_flux_norm_cont, d_flux_norm_med, d_flux_raw,
-            #                  d_z, d_snr, d_ids, *param_dsets.values()]:
-            #         dset.resize(row, axis=0)
+            # n_bad = len(skipped_norm_cont_negative)
+            # if n_bad:
+            #     print(f"{split_name}: {n_bad} objects dropped — NORM_CON <= 0 (continuum fit failed)")            
+
             if row < n_samples:
                 print(f"{split_name}: {n_samples - row} skipped; resizing {n_samples} -> {row}")
                 for dset in [d_flux_log, d_flux_raw,
-                             d_z, d_snr, d_ids, *param_dsets.values()]:
+                             d_z, d_snr, d_ids, d_norm_con, d_norm_med, *param_dsets.values()]:
                     dset.resize(row, axis=0)
 
             if skipped:
                 group.create_dataset("skipped", data=np.array(skipped, dtype="S"))
+            if skipped_norm_cont_negative:
+                print(f"{split_name}: dropped {len(skipped_norm_cont_negative)} — NORM_CON <= 0")
+                group.create_dataset("skipped_norm_con",
+                                     data=np.array(skipped_norm_cont_negative, dtype="S"))
 
             # ---- final training stats (unchanged maths) ----
             if split_name == "train":
