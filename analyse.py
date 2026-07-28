@@ -7,6 +7,7 @@ import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 from scipy.stats import spearmanr
+from scipy.stats import pearsonr
 
 import autoencoder as ae
 import funcs
@@ -62,12 +63,14 @@ def analyse_one(run_dir, device, method="both"):
 	# ---- the scaling comparison (your point 2) ------------------------------
 	ls, lu = valid_ev["loss_scaled"], valid_ev["loss_unscaled"]
 	rho, _ = spearmanr(ls, lu)
+	pearson, _ = pearsonr(ls, lu)
 	top_log  = set(np.argsort(ls)[-100:])
 	top_phys = set(np.argsort(lu)[-100:])
 	overlap = len(top_log & top_phys)
 
 	print(f"\n=== {path.Path(run_dir).name} ===")
 	print(f"  Spearman(log-space, physical-space) per-spectrum loss : {rho:.3f}")
+	print(f"  Pearson(log-space, physical-space) per-spectrum loss : {pearson:.3f}")
 	print(f"  top-100 anomaly overlap between the two metrics       : {overlap}/100")
 	print(f"  effective latent size : {valid_ev['n_eff']} / {valid_ev['latent'].shape[1]}")
 	print(f"  valid loss p95/median : {np.percentile(lu, 95) / np.median(lu):.2f}   "
