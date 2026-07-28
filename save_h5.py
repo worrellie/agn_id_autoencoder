@@ -250,11 +250,7 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                     print(f"Skipping {f} due to error: {e}")
                     skipped.append(os.path.basename(f))
                     # row NOT advanced -> no hole
-
-            # trim the over-allocated tail left by any skips
-            # n_bad = len(skipped_norm_cont_negative)
-            # if n_bad:
-            #     print(f"{split_name}: {n_bad} objects dropped — NORM_CON <= 0 (continuum fit failed)")            
+         
 
             if row < n_samples:
                 print(f"{split_name}: {n_samples - row} skipped; resizing {n_samples} -> {row}")
@@ -265,7 +261,7 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
             if skipped:
                 group.create_dataset("skipped", data=np.array(skipped, dtype="S"))
             if skipped_norm_cont_negative:
-                print(f"{split_name}: dropped {len(skipped_norm_cont_negative)} — NORM_CON <= 0")
+                print(f"{split_name}: dropped {len(skipped_norm_cont_negative)} — NORM_CONT <= 0")
                 group.create_dataset("skipped_norm_con",
                                      data=np.array(skipped_norm_cont_negative, dtype="S"))
 
@@ -399,7 +395,7 @@ def check_h5_structure(name, obj):
 def main():
 
     output_dir = "processed_spectra"
-    h5_filename = "all_spectra_float32_v2.h5"
+    h5_filename = "all_spectra_float32_v3.h5"
 
     result = sklearn_split_data(
             output_dir, h5_filename
