@@ -30,18 +30,21 @@ class H5SpecDataset(torch.utils.data.Dataset):
 		self.preload = preload
 		self.device = device
 
-		if self.flux_type == "normalized_flux_cont":
-			mean_key = "norm_mean_cont"
-			std_key = "norm_std_cont"
-		elif self.flux_type == "raw_flux":
+		# if self.flux_type == "normalized_flux_cont":
+		# 	mean_key = "norm_mean_cont"
+		# 	std_key = "norm_std_cont"
+		if self.flux_type == "raw_flux":
 			mean_key = "raw_mean"
 			std_key = "raw_std"
-		elif self.flux_type == "normalized_flux_med":
-			mean_key = "norm_mean_med"
-			std_key = "norm_std_med"
+		# elif self.flux_type == "normalized_flux_med":
+		# 	mean_key = "norm_mean_med"
+		# 	std_key = "norm_std_med"
 		elif self.flux_type == "log_scale_flux":
 			mean_key = "norm_mean_log"
 			std_key = "norm_std_log"
+		elif self.flux_type == "log_scale_flux_med":
+			mean_key = "norm_mean_log_med"
+			std_key = "norm_std_log_med"
 		else:
 			logger.info("WARNING: INVALID flux type, defaulting to raw")
 			self.flux_type = "raw_flux"
@@ -144,7 +147,10 @@ class H5SpecDataset(torch.utils.data.Dataset):
 			if self.hf is None:
 				self.hf = h5py.File(self.data_path, "r")
 			try:
-				self.snr = np.array(self.hf[self.split]["SNR"])
+				if self.flux_type == "log_scale_flux":
+					self.snr = np.array(self.hf[self.split]["SNR_MEAN"])
+				elif self.flux_type == "log_scale_flux_med":
+					self.snr = np.array(self.hf[self.split]["SNR_MED"])
 			except KeyError:
 				return None
 		return self.snr

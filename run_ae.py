@@ -59,9 +59,9 @@ def main():
 		model_type="StandardAutoencoder",
 	)
 
-	parser.add_argument("-f", "--filename", default="all_spectra_float32.h5")
+	parser.add_argument("-f", "--filename", default="all_spectra_float32_v2.h5") # also all_spectra_float32_med.h5 (same but with median norm flux)
 	parser.add_argument("-p", "--project_name", default="unspecified_project")
-	parser.add_argument("-ft", "--flux_type", default="log_scale_flux")
+	parser.add_argument("-ft", "--flux_type", default="log_scale_flux") # also log_scale_flux_med
 
 	# note this is for standardizing for training
 	parser.add_argument( "-n", "--normalize", action="store_true" )  # if --standardize is parsed, True is returned

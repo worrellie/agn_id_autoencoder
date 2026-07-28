@@ -1,15 +1,15 @@
 """
-Round-trip tests for funcs._to_physical_space.
+Round-trip tests for funcs._to_norm_space.
 
 Each test applies the forward transform (the same pipeline used in save_h5 +
-training.py) to produce x_model, then calls _to_physical_space to invert it,
+training.py) to produce x_model, then calls _to_norm_space to invert it,
 and asserts we recover x_start within floating-point tolerance.
 
 Forward pipeline order:
   1. log step : x_log = sign(x) * log1p(|x|)    [if flux_type == "log_scale_flux"]
   2. Z-score  : x_model = (x_log - mean) / std   [if normalize == True]
 
-_to_physical_space inverts in reverse order (Z-score first, then log).
+_to_norm_space inverts in reverse order (Z-score first, then log).
 """
 
 import pytest
@@ -67,7 +67,7 @@ def test_physical_space_round_trip(normalize, flux_type, forward_fn):
     x_start = torch.randn(BATCH, INPUT_SIZE)
 
     x_model = forward_fn(x_start)
-    result = funcs._to_physical_space(x_model, MEAN, STD, normalize, flux_type)
+    result = funcs._to_norm_space(x_model, MEAN, STD, normalize, flux_type)
 
     assert torch.allclose(result, x_start, atol=1e-5), (
         f"Round-trip failed for normalize={normalize}, flux_type={flux_type}. "

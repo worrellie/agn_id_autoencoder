@@ -282,8 +282,8 @@ class Trainer:
 						# )
 
 						# get unscaled x and xhat and losses
-						x_hat_unscaled = funcs._to_physical_space(x_hat, train_mean, train_std, standardize, flux_type, mask = x_mask)
-						x_unscaled = funcs._to_physical_space(x, train_mean, train_std, standardize, flux_type, mask = x_mask)
+						x_hat_unscaled = funcs._to_norm_space(x_hat, train_mean, train_std, standardize, flux_type, mask = x_mask)
+						x_unscaled = funcs._to_norm_space(x, train_mean, train_std, standardize, flux_type, mask = x_mask)
 
 						mse_unscaled, _, _ = funcs._loss_calc_batch(x_hat_unscaled, x_unscaled, x_mask, mu=None, logvar=None, beta=0.0)
 						# rel_mse_unscaled = funcs._rel_mse_calc_batch(x_hat_unscaled, x_unscaled, x_mask,)
