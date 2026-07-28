@@ -48,3 +48,9 @@ stats_all.csv
 stats_trainval.csv
 
 all_spectra*.h5
+
+sae_*
+*.log
+loss_*
+*.png
+wandb*
