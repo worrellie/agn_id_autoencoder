@@ -12,7 +12,7 @@ import warnings
 
 
 # helper for getting fits hear keys/names
-SYSTEM_KEYS = {"OG_Z", "SNR", "ORIGINAL", "NORM_CON", "NORM_MED"}
+SYSTEM_KEYS = {"OG_Z", "SNR_MEAN", "SNR_MED", "NOISE", "ORIGINAL", "NORM_CMN", "NORM_CMD", "NORM_MED"}
 SKIP = {"XTENSION","BITPIX","NAXIS","NAXIS1","NAXIS2","PCOUNT","GCOUNT",
         "TFIELDS","SIMPLE","EXTEND","COMMENT","HISTORY",""}
 
@@ -27,8 +27,6 @@ def discover_param_keys(sample_fits):
             continue
         keys.append(kw)
     return keys
-
-
 
 def sklearn_split_data(processed_dir, h5_filename, test_size=0.2, norm=False):
 
@@ -103,6 +101,10 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                 "log_scale_flux", (n_samples, n_pixels), dtype="f4",
                 maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
             )
+            d_flux_log_med = group.create_dataset(
+                "log_scale_flux_med", (n_samples, n_pixels), dtype="f4",
+                maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
+            )
             # d_flux_norm_cont = group.create_dataset(
             #     "normalized_flux_cont", (n_samples, n_pixels), dtype="f4",
             #     maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
@@ -116,16 +118,21 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                 maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
             )
 
+            # ?????????
             d_z   = group.create_dataset("redshift", (n_samples,), dtype="f4",  maxshape=(None,))
-            d_snr = group.create_dataset("SNR",      (n_samples,), dtype="f4",  maxshape=(None,))
+            d_snr_mean = group.create_dataset("SNR_MEAN",      (n_samples,), dtype="f4",  maxshape=(None,))
+            d_snr_med = group.create_dataset("SNR_MED",      (n_samples,), dtype="f4",  maxshape=(None,))
+            d_noise = group.create_dataset("NOISE",      (n_samples,), dtype="f4",  maxshape=(None,))
             d_ids = group.create_dataset("obj_id",   (n_samples,), dtype="S100", maxshape=(None,))
-            d_norm_con = group.create_dataset("NORM_CON", (n_samples,), dtype="f4",  maxshape=(None,))
+            d_norm_cmn = group.create_dataset("NORM_CMN", (n_samples,), dtype="f4",  maxshape=(None,))
+            d_norm_cmd = group.create_dataset("NORM_CMD", (n_samples,), dtype="f4",  maxshape=(None,))
             d_norm_med = group.create_dataset("NORM_MED", (n_samples,), dtype="f4",  maxshape=(None,))
             
             param_dsets = {
                 kw: group.create_dataset(kw, (n_samples,), dtype="f4", maxshape=(None,))
                 for kw in param_keys
             }
+            ##############
 
             # training-set running stats (population) — your existing sum-based form
             total_pixels = 0
@@ -133,11 +140,11 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
             # sum_norm_cont = sum_sq_norm_cont = 0.0
             # sum_norm_med = sum_sq_norm_med = 0.0
             sum_norm_log = sum_sq_norm_log = 0.0
+            sum_norm_log_med = sum_sq_norm_log_med = 0.0
 
             row = 0           # write position: advances ONLY on success
             skipped = []      # audit trail of files that errored
             skipped_norm_cont_negative = []
-
             for f in split_list:
                 try:
                     with fits.open(f) as hdul:
@@ -145,21 +152,29 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                         raw_flux = hdul[1].data["flux"].astype(np.float64)
                         unmasked = (raw_flux != 0)
 
-                        norm_factor_continuum = hdr.get("NORM_CON")
+                        norm_factor_continuum = hdr.get("NORM_CMN")
+                        norm_factor_continuum_med = hdr.get("NORM_CMD")
                         norm_factor_median   = hdr.get("NORM_MED")
                         try:
                             norm_factor_continuum = float(norm_factor_continuum)
                         except (TypeError, ValueError):
                             norm_factor_continuum = None      # falls into the "invalid -> 1.0" branch below
                         try:
+                            norm_factor_continuum_med = float(norm_factor_continuum_med)
+                        except (TypeError, ValueError):
+                            norm_factor_continuum_med = None 
+                        try:
                             norm_factor_median = float(norm_factor_median)
                         except (TypeError, ValueError):
                             norm_factor_median = None
                         
-                        # skip spec if cont region mean is negative
+                        # skip spec if cont region mean OR median is negative
                         if (norm_factor_continuum is None
                                 or not np.isfinite(norm_factor_continuum)
-                                or norm_factor_continuum <= 0):
+                                or norm_factor_continuum <= 0
+                                or norm_factor_continuum_med is None
+                                or not np.isfinite(norm_factor_continuum_med)
+                                or norm_factor_continuum_med <= 0):
                             skipped_norm_cont_negative.append(os.path.basename(f))
                             continue        # row NOT advanced; stats NOT accumulated
 
@@ -170,39 +185,37 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                                 or norm_factor_median <= 0):
                             norm_factor_median = np.nan
 
-                        # if (norm_factor_continuum is None or norm_factor_continuum == 0
-                        #         or np.isnan(norm_factor_continuum)):
-                        #     warnings.warn(f"Invalid NORM_CON ({norm_factor_continuum}) in "
-                        #                   f"{os.path.basename(f)}. Defaulting to 1.0.")
-                        #     norm_factor_continuum = 1.0
-                        # if (norm_factor_median is None or norm_factor_median == 0
-                        #         or np.isnan(norm_factor_median)):
-                        #     warnings.warn(f"Invalid NORM_MED ({norm_factor_median}) in "
-                        #                   f"{os.path.basename(f)}. Defaulting to 1.0.")
-                        #     norm_factor_median = 1.0
-
                         norm_flux_cont = raw_flux / norm_factor_continuum
-                        # norm_flux_med  = raw_flux / norm_factor_median
+                        norm_flux_cont_med = raw_flux / norm_factor_continuum_med
+                        
                         log_scale_flux = np.sign(norm_flux_cont) * np.log1p(np.abs(norm_flux_cont))
                         log_scale_flux = log_scale_flux * unmasked
+                        log_scale_flux_med = np.sign(norm_flux_cont_med) * np.log1p(np.abs(norm_flux_cont_med))
+                        log_scale_flux_med = log_scale_flux_med * unmasked
 
                         # --- writes (use `row`, not the loop position) ---
                         d_z[row]   = float(hdr["OG_Z"])
-                        d_snr[row] = float(hdr["SNR"])
+                        d_snr_mean[row] = float(hdr["SNR_MEAN"])
+                        d_snr_med[row] = float(hdr["SNR_MED"])
+                        d_noise[row] = float(hdr["NOISE"])
                         d_ids[row] = os.path.basename(f).encode("utf-8")
-                        d_norm_con[row] = float(norm_factor_continuum)
+                        d_norm_cmn[row] = float(norm_factor_continuum)
+                        d_norm_cmd[row] = float(norm_factor_continuum_med)
                         d_norm_med[row] = float(norm_factor_median)
+
                         for param_name, dset in param_dsets.items():
                             val = hdr.get(param_name, np.nan)
                             dset[row] = np.nan if val is None else val
 
                         raw_flux_out = np.where(unmasked, raw_flux, np.nan)
                         log_scale_out = np.where(unmasked, log_scale_flux, np.nan)
+                        log_scale_med_out = np.where(unmasked, log_scale_flux_med, np.nan)
 
                         d_flux_raw[row]       = raw_flux_out
                         # d_flux_norm_cont[row] = norm_flux_cont
                         # d_flux_norm_med[row]  = norm_flux_med
                         d_flux_log[row]       = log_scale_out
+                        d_flux_log_med[row]     = log_scale_med_out
 
                         # --- stats LAST: only counted once the row is committed ---
                         if split_name == "train":
@@ -212,11 +225,12 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                                 & (~np.isnan(norm_flux_cont))
                                 # & (~np.isnan(norm_flux_med))
                                 & (~np.isnan(log_scale_flux))
+                                & (~np.isnan(log_scale_flux_med))
                             )
                             valid_raw       = raw_flux[mask]
-                            # valid_norm_cont = norm_flux_cont[mask]
-                            # valid_norm_med  = norm_flux_med[mask]
                             valid_log       = log_scale_flux[mask]
+                            valid_log_med       = log_scale_flux_med[mask]
+
 
                             total_pixels      += valid_raw.size
                             sum_raw           += np.sum(valid_raw)
@@ -227,6 +241,8 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                             # sum_sq_norm_med   += np.sum(valid_norm_med**2)
                             sum_norm_log      += np.sum(valid_log)
                             sum_sq_norm_log   += np.sum(valid_log**2)
+                            sum_norm_log_med      += np.sum(valid_log_med)
+                            sum_sq_norm_log_med   += np.sum(valid_log_med**2)
 
                     row += 1   # reached only if the whole try-body succeeded
 
@@ -242,8 +258,8 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
 
             if row < n_samples:
                 print(f"{split_name}: {n_samples - row} skipped; resizing {n_samples} -> {row}")
-                for dset in [d_flux_log, d_flux_raw,
-                             d_z, d_snr, d_ids, d_norm_con, d_norm_med, *param_dsets.values()]:
+                for dset in [d_flux_log, d_flux_log_med, d_flux_raw,
+                             d_z, d_snr_mean, d_snr_med, d_noise, d_ids, d_norm_cmn, d_norm_cmd, d_norm_med, *param_dsets.values()]:
                     dset.resize(row, axis=0)
 
             if skipped:
@@ -257,13 +273,13 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
             if split_name == "train":
                 final_mean_raw = sum_raw / total_pixels
                 final_std_raw = np.sqrt(max(0, sum_sq_raw / total_pixels - final_mean_raw**2))
-                # final_mean_norm_cont = sum_norm_cont / total_pixels
-                # final_std_norm_cont = np.sqrt(max(0, sum_sq_norm_cont / total_pixels - final_mean_norm_cont**2))
-                # final_mean_norm_med = sum_norm_med / total_pixels
-                # final_std_norm_med = np.sqrt(max(0, sum_sq_norm_med / total_pixels - final_mean_norm_med**2))
+
                 final_mean_norm_log = sum_norm_log / total_pixels
                 final_std_norm_log = np.sqrt(max(0, sum_sq_norm_log / total_pixels - final_mean_norm_log**2))
 
+                final_mean_norm_log_med = sum_norm_log_med / total_pixels
+                final_std_norm_log_med = np.sqrt(max(0, sum_sq_norm_log_med / total_pixels - final_mean_norm_log_med**2))
+                
                 # train_stats.update({
                 #     "raw_mean": final_mean_raw, "raw_std": final_std_raw,
                 #     "norm_mean_cont": final_mean_norm_cont, "norm_std_cont": final_std_norm_cont,
@@ -273,6 +289,7 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
                 train_stats.update({
                     "raw_mean": final_mean_raw, "raw_std": final_std_raw,
                     "norm_mean_log": final_mean_norm_log, "norm_std_log": final_std_norm_log,
+                    "norm_mean_log_med" : final_mean_norm_log_med, "norm_std_log_med": final_std_norm_log_med,
                 })
 
         if "raw_mean" in train_stats:
@@ -310,6 +327,7 @@ def check_h5_samples(h5_path, norm):
             # dset_norm_cont = hf[split]["normalized_flux_cont"]
             # dset_norm_med = hf[split]["normalized_flux_med"]
             dset_log = hf[split]["log_scale_flux"]
+            dset_log_med = hf[split]["log_scale_flux_med"]
             n_samples = dset_raw.shape[0]
 
             if n_samples == 0:
@@ -322,13 +340,13 @@ def check_h5_samples(h5_path, norm):
             # 4. Load the data
             flux = dset_raw[rand_idx]
             norm_flux = dset_log[rand_idx]
+            norm_flux_med = dset_log_med[rand_idx]
             z = hf[split]["redshift"][rand_idx]
             obj_id = hf[split]["obj_id"][rand_idx].decode("utf-8")
 
             # Print to console for manual zero-check in the gaps
             print(f"--- {split.upper()} (Index {rand_idx}) ---")
             print(f"ID: {obj_id}")
-            # print(flux) # Uncomment if you want the full array in console
 
             # 5. Plotting
             if norm:
@@ -336,6 +354,11 @@ def check_h5_samples(h5_path, norm):
                 axes[i].set_title(
                     f"Split: {split.upper()} | ID: {obj_id} | z: {z:.4f} (normalized spec)"
                 )
+            # elif norm_med:
+            #     axes[i].step(wave, norm_flux_med, where="mid", color="green", lw=0.8)
+            #     axes[i].set_title(
+            #         f"Split: {split.upper()} | ID: {obj_id} | z: {z:.4f} (normalized spec (according to cont median))"
+            #     )
             else:
                 axes[i].step(wave, flux, where="mid", color="midnightblue", lw=0.8)
                 axes[i].set_title(
@@ -376,7 +399,7 @@ def check_h5_structure(name, obj):
 def main():
 
     output_dir = "processed_spectra"
-    h5_filename = "all_spectra_float32.h5"
+    h5_filename = "all_spectra_float32_v2.h5"
 
     result = sklearn_split_data(
             output_dir, h5_filename

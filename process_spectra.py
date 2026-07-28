@@ -342,16 +342,24 @@ def calc_SNR(flux, l):
 
     noise = np.std(target_flux)
     mean_flux = np.mean(target_flux)
-    # median_flux = np.median(target_flux)
+    median_flux = np.median(target_flux)
 
     if noise == 0:
         print("could not get snr, zero noise")
         return mean_flux, 0.0, 0.0
 
-    snr = mean_flux / noise
+    snr_mean = mean_flux / noise
+    snr_median = median_flux / noise
 
-    # return continuum mean, noise (std) and snr
-    return mean_flux, noise, snr
+    noise_info = {
+        'mean_flux' : mean_flux,
+        'median_flux' : median_flux,
+        'noise' : noise,
+        'snr_mean' : snr_mean,
+        'snr_median' : snr_median,
+    }
+
+    return noise_info
 
 def get_id(base_name):
     # returns the cosmosID from the base name of the file
@@ -369,16 +377,22 @@ def make_col_name_fits_compatible(col_name):
 
     return col_name
 
-def save_spec( flux, l, original_z, snr, norm_factors, ref_cat_row, infile_base, outdir, noise_type="noisy"):
+def save_spec( flux, l, original_z, snr_and_noise, norm_factors, ref_cat_row, infile_base, outdir, noise_type="noisy"):
 
     col1 = fits.Column(name="lambda", format="D", array=l)
     col2 = fits.Column(name="flux", format="D", array=flux)
 
     hdr = fits.Header()
     hdr["OG_Z"] = str(original_z)
-    hdr["SNR"] = str(snr)
+
+    hdr["SNR_MEAN"] = str(snr_and_noise['snr_mean'])
+    hdr["SNR_MED"] = str(snr_and_noise['snr_median'])
+    hdr["NOISE"] = str(snr_and_noise['noise'])
+
     hdr["ORIGINAL"] = infile_base
-    hdr["NORM_CON"] = str(norm_factors['continuum_mean'])
+
+    hdr["NORM_CMN"] = str(norm_factors['continuum_mean'])
+    hdr["NORM_CMD"] = str(norm_factors['continuum_median'])
     hdr['NORM_MED'] = str(norm_factors['full_spec_median'])
 
     for col, val in ref_cat_row.items():
@@ -446,15 +460,38 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
             print(f"fully masked spec: {base_name}")
 
         # get normalization factors (saved and stored in fits spectrum )
-        cont_mean, noise, snr = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
-        if (noise == 0.0 and snr == 0.0) or (cont_mean == 0.0 or np.isnan(cont_mean) or cont_mean is None):
-            print(f"invalid spec {base_name} with ({cont_mean}, {noise}, {snr})")
+        
+        # cont_mean, noise, snr = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
+        noise_info = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
+
+        noise = noise_info['noise']
+        cont_mean = noise_info['mean_flux']
+        cont_median = noise_info['median_flux']
+        snr_mean = noise_info['snr_mean']
+        snr_median = noise_info['snr_median']
+
+        # if no continuum flux measurement OR
+        # if noise and snr are 0, spec is invalid
+        # MEAN
+        if (noise == 0.0 and snr_mean == 0.0) or (cont_mean == 0.0 or np.isnan(cont_mean) or cont_mean is None):
+            print(f"invalid spec {base_name} with ({cont_mean}, {noise}, {snr_mean})")
+        # MEDIAN
+        if (noise == 0.0 and snr_median == 0.0) or (cont_median == 0.0 or np.isnan(cont_median) or cont_median is None):
+            print(f"invalid spec {base_name} with ({cont_median}, {noise}, {snr_median})")
+        # I guess keep, but not sure im using it..
         full_spec_median = np.median(final_spec_flux[~mask])
         if  (full_spec_median == 0.0 or np.isnan(full_spec_median) or full_spec_median is None):
             print(f"invalid spec {base_name} with {full_spec_median}")
         
         norm_factors = {'continuum_mean' : cont_mean,
+                        'continuum_median' : cont_median,
+                        # 'noise' : noise,
+                        # 'snr_mean' : snr_mean,
+                        # 'snr_median' : snr_median,
                         'full_spec_median' : full_spec_median}
+        snr_and_noise = {'snr_mean' : snr_mean,
+                         'snr_median' :  snr_median,
+                         'noise' : noise}
 
         # save spectrum in fits
         id = get_id(base_name)
@@ -463,7 +500,7 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
         if idx is None:
             print(f"ID {id} not found in reference catalogue")
 
-        save_spec(final_spec_flux, final_spec_l, redshift, snr, norm_factors, ref_cat_row, base_name, output_dir,)
+        save_spec(final_spec_flux, final_spec_l, redshift, snr_and_noise, norm_factors, ref_cat_row, base_name, output_dir,)
 
         return base_name  # Useful for tracking progress
 
