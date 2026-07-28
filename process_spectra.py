@@ -326,17 +326,18 @@ def merge_orignal_de_z(flux, l):
 
     return [flux, l]
 
-def calc_SNR(flux, l, full_spectrum_mask):
+def calc_SNR(flux, l):
 
     flux = np.asarray(flux)
     l = np.asarray(l)
 
     # look at only continuum region of spectrum
     continuum_region_mask = (l >= 5100) & (l <= 5800) & (flux != 0)
+    full_spectrum_mask = (flux != 0)
 
     continuum_region_flux = flux[continuum_region_mask]
-    full_spectrum_flux = flux[~full_spectrum_mask]
-    # print(len(target_flux))
+    full_spectrum_flux = flux[full_spectrum_mask]
+
     if continuum_region_flux.size < 2:
         print("could not get snr: continuum region too small")
         return 0.0, 0.0, 0.0
@@ -456,14 +457,14 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
         final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
 
         # check for fully masked spectra
-        mask = final_spec_flux == 0
+        mask = final_spec_flux == 0 # mask only of CROPPED spectrum
         if mask.all():
             print(f"fully masked spec: {base_name}")
 
         # get normalization factors (saved and stored in fits spectrum )
         
         # cont_mean, noise, snr = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
-        noise_info = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest), mask)
+        noise_info = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
 
         noise = noise_info['noise']
         cont_mean = noise_info['mean_flux']
