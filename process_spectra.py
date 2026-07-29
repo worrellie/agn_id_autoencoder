@@ -343,11 +343,6 @@ def calc_SNR(flux, l):
         return {'mean_flux': 0.0, 'median_flux': 0.0,
                 'continuum_mean': 0.0, 'continuum_median': 0.0,
                 'noise': 0.0, 'snr_mean': 0.0, 'snr_median': 0.0}
-    if noise == 0:
-        print("could not get snr, zero noise")
-        return {'mean_flux': mean_flux, 'median_flux': median_flux,
-                'continuum_mean': continuum_mean, 'continuum_median': continuum_median,
-                'noise': 0.0, 'snr_mean': 0.0, 'snr_median': 0.0}
 
     noise = np.std(continuum_region_flux)
     mean_flux = np.mean(full_spectrum_flux)
@@ -355,10 +350,16 @@ def calc_SNR(flux, l):
 
     continuum_mean = np.mean(continuum_region_flux)
     continuum_median = np.median(continuum_region_flux)
-    
+
+    if noise == 0:
+        print("could not get snr, zero noise")
+        return {'mean_flux': mean_flux, 'median_flux': median_flux,
+                'continuum_mean': continuum_mean, 'continuum_median': continuum_median,
+                'noise': 0.0, 'snr_mean': 0.0, 'snr_median': 0.0}
 
     snr_mean = mean_flux / noise
     snr_median = median_flux / noise
+
 
     noise_info = {
         'mean_flux' : mean_flux,
