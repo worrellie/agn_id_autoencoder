@@ -340,15 +340,22 @@ def calc_SNR(flux, l):
 
     if continuum_region_flux.size < 2:
         print("could not get snr: continuum region too small")
-        return 0.0, 0.0, 0.0
+        return {'mean_flux': 0.0, 'median_flux': 0.0,
+                'continuum_mean': 0.0, 'continuum_median': 0.0,
+                'noise': 0.0, 'snr_mean': 0.0, 'snr_median': 0.0}
+    if noise == 0:
+        print("could not get snr, zero noise")
+        return {'mean_flux': mean_flux, 'median_flux': median_flux,
+                'continuum_mean': continuum_mean, 'continuum_median': continuum_median,
+                'noise': 0.0, 'snr_mean': 0.0, 'snr_median': 0.0}
 
     noise = np.std(continuum_region_flux)
     mean_flux = np.mean(full_spectrum_flux)
     median_flux = np.median(full_spectrum_flux)
 
-    if noise == 0:
-        print("could not get snr, zero noise")
-        return mean_flux, 0.0, 0.0
+    continuum_mean = np.mean(continuum_region_flux)
+    continuum_median = np.median(continuum_region_flux)
+    
 
     snr_mean = mean_flux / noise
     snr_median = median_flux / noise
@@ -356,6 +363,8 @@ def calc_SNR(flux, l):
     noise_info = {
         'mean_flux' : mean_flux,
         'median_flux' : median_flux,
+        'continuum_mean' : continuum_mean,
+        'continuum_median' : continuum_median,
         'noise' : noise,
         'snr_mean' : snr_mean,
         'snr_median' : snr_median,
@@ -467,8 +476,8 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
         noise_info = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
 
         noise = noise_info['noise']
-        cont_mean = noise_info['mean_flux']
-        cont_median = noise_info['median_flux']
+        cont_mean = noise_info['continuum_mean']
+        cont_median = noise_info['continuum_median']
         snr_mean = noise_info['snr_mean']
         snr_median = noise_info['snr_median']
 
