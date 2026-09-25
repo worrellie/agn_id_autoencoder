@@ -50,9 +50,36 @@ def sklearn_split_data(processed_dir, h5_filename, test_size=0.2, norm=False):
             print(f"{tag} has: {len(group)} sources")
             if not group:
                 print(f"no files found of {tag} exposure time")
-                continue  # leave loop iteration and go to next
+                continue  
+            
+            # >>> CHANGED: Safe check for groups with 1 or very few files
+            if len(group) == 1:
+                print(f"⚠️ Warning: Group '{tag}' has only 1 file. Assigning to training set.")
+                all_train.append(group[0])
+            elif len(group) == 2:
+                print(f"⚠️ Warning: Group '{tag}' has only 2 files. Splitting train/test.")
+                train_files, temp_files = train_test_split(group, test_size=0.5, random_state=RND)
+                all_train.extend(train_files)
+                all_test.extend(temp_files)
+            else:
+                train_files, temp_files = train_test_split(
+                    group, test_size=test_size, random_state=RND
+                )
+                valid_files, test_files = train_test_split(
+                    temp_files, test_size=0.5, random_state=RND
+                )
+                all_train.extend(train_files)
+                all_valid.extend(valid_files)
+                all_test.extend(test_files)
+    else:
+        # Fallback if total file count is small
+        if len(files) <= 2:
+            all_train.append(files[0])
+            if len(files) == 2:
+                all_test.append(files[1])
+        else:
             train_files, temp_files = train_test_split(
-                group, test_size=test_size, random_state=RND
+                files, test_size=test_size, random_state=RND
             )
             valid_files, test_files = train_test_split(
                 temp_files, test_size=0.5, random_state=RND
@@ -60,19 +87,54 @@ def sklearn_split_data(processed_dir, h5_filename, test_size=0.2, norm=False):
             all_train.extend(train_files)
             all_valid.extend(valid_files)
             all_test.extend(test_files)
-    else:
-        train_files, temp_files = train_test_split(
-            files, test_size=test_size, random_state=RND
-        )
-        valid_files, test_files = train_test_split(
-            temp_files, test_size=0.5, random_state=RND
-        )
-        all_train.extend(train_files)
-        all_valid.extend(valid_files)
-        all_test.extend(test_files)
-
 
     return files, all_train, all_valid, all_test
+
+def sklearn_split_agn(processed_dir, h5_filename, test_size=0.2, norm=False):
+
+    files = np.array(sorted(glob.glob(os.path.join(processed_dir, "*_rebinned.fits"))))
+
+    if len(files) == 0:
+        print(f"No files found in {processed_dir}! Check your path and naming.")
+        return None
+
+    # AGNs only have 2h and 8h variants
+    groups = {
+        tag: [f for f in files if tag in os.path.basename(f)]
+        for tag in ["2h", "8h"]
+    }
+
+    all_valid = []
+    all_test = []
+
+    if len(files) > 10:
+        for tag, group in groups.items():
+            print(f"{tag} has: {len(group)} sources")
+            if not group:
+                print(f"no files found of {tag} exposure time")
+                continue
+            
+            # Safe check if group has only 1 file to prevent train_test_split failure
+            if len(group) == 1:
+                print(f"⚠️ Warning: Group '{tag}' has only 1 file. Assigning to validation set.")
+                all_valid.append(group[0])
+            else:
+                valid_files, test_files = train_test_split(
+                    group, test_size=test_size, random_state=RND
+                )
+                all_valid.extend(valid_files)
+                all_test.extend(test_files)
+    else:
+        if len(files) == 1:
+            all_valid.append(files[0])
+        else:
+            valid_files, test_files = train_test_split(
+                files, test_size=test_size, random_state=RND
+            )
+            all_valid.extend(valid_files)
+            all_test.extend(test_files)
+
+    return files, all_valid, all_test
 
 
 def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_files):
@@ -267,32 +329,226 @@ def save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_f
 
             # ---- final training stats (unchanged maths) ----
             if split_name == "train":
-                final_mean_raw = sum_raw / total_pixels
-                final_std_raw = np.sqrt(max(0, sum_sq_raw / total_pixels - final_mean_raw**2))
+                if total_pixels > 0:
+                    final_mean_raw = sum_raw / total_pixels
+                    final_std_raw = np.sqrt(max(0, sum_sq_raw / total_pixels - final_mean_raw**2))
 
-                final_mean_norm_log = sum_norm_log / total_pixels
-                final_std_norm_log = np.sqrt(max(0, sum_sq_norm_log / total_pixels - final_mean_norm_log**2))
+                    final_mean_norm_log = sum_norm_log / total_pixels
+                    final_std_norm_log = np.sqrt(max(0, sum_sq_norm_log / total_pixels - final_mean_norm_log**2))
 
-                final_mean_norm_log_med = sum_norm_log_med / total_pixels
-                final_std_norm_log_med = np.sqrt(max(0, sum_sq_norm_log_med / total_pixels - final_mean_norm_log_med**2))
-                
-                # train_stats.update({
-                #     "raw_mean": final_mean_raw, "raw_std": final_std_raw,
-                #     "norm_mean_cont": final_mean_norm_cont, "norm_std_cont": final_std_norm_cont,
-                #     "norm_mean_med": final_mean_norm_med, "norm_std_med": final_std_norm_med,
-                #     "norm_mean_log": final_mean_norm_log, "norm_std_log": final_std_norm_log,
-                # })
-                train_stats.update({
-                    "raw_mean": final_mean_raw, "raw_std": final_std_raw,
-                    "norm_mean_log": final_mean_norm_log, "norm_std_log": final_std_norm_log,
-                    "norm_mean_log_med" : final_mean_norm_log_med, "norm_std_log_med": final_std_norm_log_med,
-                })
+                    final_mean_norm_log_med = sum_norm_log_med / total_pixels
+                    final_std_norm_log_med = np.sqrt(max(0, sum_sq_norm_log_med / total_pixels - final_mean_norm_log_med**2))
+                    
+                    train_stats.update({
+                        "raw_mean": final_mean_raw, "raw_std": final_std_raw,
+                        "norm_mean_log": final_mean_norm_log, "norm_std_log": final_std_norm_log,
+                        "norm_mean_log_med" : final_mean_norm_log_med, "norm_std_log_med": final_std_norm_log_med,
+                    })
+                else:
+                    print("⚠️ Warning: No valid pixels found in training split to compute stats (total_pixels = 0).")
 
         if "raw_mean" in train_stats:
             for k, v in train_stats.items():
                 hf.attrs[k] = v
 
     print(f"\n🏁 Successfully compiled {h5_filename}")
+
+
+def save_h5_agn(reference_fits, h5_filename, files, valid_files, test_files):
+
+    with fits.open(files[0]) as hdul:
+        n_pixels = len(hdul[1].data["lambda"])
+        wavelength_grid = hdul[1].data["lambda"]
+
+    file_splits = {"validation": valid_files, "test": test_files}
+    # train_stats = {}
+
+    # schema is identical across splits -> discover keywords ONCE
+    param_keys = discover_param_keys(reference_fits)
+
+    with h5py.File(h5_filename, "w") as hf:
+        hf.attrs["wavelengths"] = wavelength_grid
+
+        for split_name, split_list in file_splits.items():
+            n_samples = len(split_list)
+            print(f"📦 Writing {split_name} group ({n_samples} samples)...")
+
+            group = hf.create_group(split_name)
+
+            # maxshape=(None, ...) makes axis 0 resizable so we can trim skips later
+            d_flux_log = group.create_dataset(
+                "log_scale_flux", (n_samples, n_pixels), dtype="f4",
+                maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
+            )
+            d_flux_log_med = group.create_dataset(
+                "log_scale_flux_med", (n_samples, n_pixels), dtype="f4",
+                maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
+            )
+            # d_flux_norm_cont = group.create_dataset(
+            #     "normalized_flux_cont", (n_samples, n_pixels), dtype="f4",
+            #     maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
+            # )
+            # d_flux_norm_med = group.create_dataset(
+            #     "normalized_flux_med", (n_samples, n_pixels), dtype="f4",
+            #     maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
+            # )
+            d_flux_raw = group.create_dataset(
+                "raw_flux", (n_samples, n_pixels), dtype="f4",
+                maxshape=(None, n_pixels), compression="lzf", chunks=(1, n_pixels),
+            )
+
+            # ?????????
+            d_z   = group.create_dataset("redshift", (n_samples,), dtype="f4",  maxshape=(None,))
+            d_snr_mean = group.create_dataset("SNR_MEAN",      (n_samples,), dtype="f4",  maxshape=(None,))
+            d_snr_med = group.create_dataset("SNR_MED",      (n_samples,), dtype="f4",  maxshape=(None,))
+            d_noise = group.create_dataset("NOISE",      (n_samples,), dtype="f4",  maxshape=(None,))
+            d_ids = group.create_dataset("obj_id",   (n_samples,), dtype="S100", maxshape=(None,))
+            d_norm_cmn = group.create_dataset("NORM_CMN", (n_samples,), dtype="f4",  maxshape=(None,))
+            d_norm_cmd = group.create_dataset("NORM_CMD", (n_samples,), dtype="f4",  maxshape=(None,))
+            d_norm_med = group.create_dataset("NORM_MED", (n_samples,), dtype="f4",  maxshape=(None,))
+            
+            param_dsets = {
+                kw: group.create_dataset(kw, (n_samples,), dtype="f4", maxshape=(None,))
+                for kw in param_keys
+            }
+            ##############
+
+            # training-set running stats (population) — your existing sum-based form
+            total_pixels = 0
+            sum_raw = sum_sq_raw = 0.0
+            # sum_norm_cont = sum_sq_norm_cont = 0.0
+            # sum_norm_med = sum_sq_norm_med = 0.0
+            sum_norm_log = sum_sq_norm_log = 0.0
+            sum_norm_log_med = sum_sq_norm_log_med = 0.0
+
+            row = 0           # write position: advances ONLY on success
+            skipped = []      # audit trail of files that errored
+            skipped_norm_cont_negative = []
+            for f in split_list:
+                try:
+                    with fits.open(f) as hdul:
+                        hdr = hdul[1].header
+                        raw_flux = hdul[1].data["flux"].astype(np.float64)
+                        unmasked = (raw_flux != 0)
+
+                        norm_factor_continuum = hdr.get("NORM_CMN")
+                        norm_factor_continuum_med = hdr.get("NORM_CMD")
+                        norm_factor_median   = hdr.get("NORM_MED")
+                        try:
+                            norm_factor_continuum = float(norm_factor_continuum)
+                        except (TypeError, ValueError):
+                            norm_factor_continuum = None      # falls into the "invalid -> 1.0" branch below
+                        try:
+                            norm_factor_continuum_med = float(norm_factor_continuum_med)
+                        except (TypeError, ValueError):
+                            norm_factor_continuum_med = None 
+                        try:
+                            norm_factor_median = float(norm_factor_median)
+                        except (TypeError, ValueError):
+                            norm_factor_median = None
+                        
+                        # skip spec if cont region mean OR median is negative
+                        if (norm_factor_continuum is None
+                                or not np.isfinite(norm_factor_continuum)
+                                or norm_factor_continuum <= 0
+                                or norm_factor_continuum_med is None
+                                or not np.isfinite(norm_factor_continuum_med)
+                                or norm_factor_continuum_med <= 0):
+                            skipped_norm_cont_negative.append(os.path.basename(f))
+                            continue        # row NOT advanced; stats NOT accumulated
+
+                        # NORM_MED is metadata only (norm_flux_med is no longer computed),
+                        # so an invalid value is recorded as NaN rather than being fabricated.
+                        if (norm_factor_median is None
+                                or not np.isfinite(norm_factor_median)
+                                or norm_factor_median <= 0):
+                            norm_factor_median = np.nan
+
+                        norm_flux_cont = raw_flux / norm_factor_continuum
+                        norm_flux_cont_med = raw_flux / norm_factor_continuum_med
+                        
+                        log_scale_flux = np.sign(norm_flux_cont) * np.log1p(np.abs(norm_flux_cont))
+                        log_scale_flux = log_scale_flux * unmasked
+                        log_scale_flux_med = np.sign(norm_flux_cont_med) * np.log1p(np.abs(norm_flux_cont_med))
+                        log_scale_flux_med = log_scale_flux_med * unmasked
+
+                        # --- writes (use `row`, not the loop position) ---
+                        d_z[row]   = float(hdr["OG_Z"])
+                        d_snr_mean[row] = float(hdr["SNR_MEAN"])
+                        d_snr_med[row] = float(hdr["SNR_MED"])
+                        d_noise[row] = float(hdr["NOISE"])
+                        d_ids[row] = os.path.basename(f).encode("utf-8")
+                        d_norm_cmn[row] = float(norm_factor_continuum)
+                        d_norm_cmd[row] = float(norm_factor_continuum_med)
+                        d_norm_med[row] = float(norm_factor_median)
+
+                        for param_name, dset in param_dsets.items():
+                            val = hdr.get(param_name, np.nan)
+                            dset[row] = np.nan if val is None else val
+
+                        raw_flux_out = np.where(unmasked, raw_flux, np.nan)
+                        log_scale_out = np.where(unmasked, log_scale_flux, np.nan)
+                        log_scale_med_out = np.where(unmasked, log_scale_flux_med, np.nan)
+
+                        d_flux_raw[row]       = raw_flux_out
+                        # d_flux_norm_cont[row] = norm_flux_cont
+                        # d_flux_norm_med[row]  = norm_flux_med
+                        d_flux_log[row]       = log_scale_out
+                        d_flux_log_med[row]     = log_scale_med_out
+
+                        # --- stats LAST: only counted once the row is committed ---
+                        if split_name == "train":
+                            mask = (
+                                (raw_flux != 0)
+                                & (~np.isnan(raw_flux))
+                                & (~np.isnan(norm_flux_cont))
+                                # & (~np.isnan(norm_flux_med))
+                                & (~np.isnan(log_scale_flux))
+                                & (~np.isnan(log_scale_flux_med))
+                            )
+                            valid_raw       = raw_flux[mask]
+                            valid_log       = log_scale_flux[mask]
+                            valid_log_med       = log_scale_flux_med[mask]
+
+
+                            total_pixels      += valid_raw.size
+                            sum_raw           += np.sum(valid_raw)
+                            sum_sq_raw        += np.sum(valid_raw**2)
+                            # sum_norm_cont     += np.sum(valid_norm_cont)
+                            # sum_sq_norm_cont  += np.sum(valid_norm_cont**2)
+                            # sum_norm_med      += np.sum(valid_norm_med)
+                            # sum_sq_norm_med   += np.sum(valid_norm_med**2)
+                            sum_norm_log      += np.sum(valid_log)
+                            sum_sq_norm_log   += np.sum(valid_log**2)
+                            sum_norm_log_med      += np.sum(valid_log_med)
+                            sum_sq_norm_log_med   += np.sum(valid_log_med**2)
+
+                    row += 1   # reached only if the whole try-body succeeded
+
+                except Exception as e:
+                    print(f"Skipping {f} due to error: {e}")
+                    skipped.append(os.path.basename(f))
+                    # row NOT advanced -> no hole
+         
+
+            if row < n_samples:
+                print(f"{split_name}: {n_samples - row} skipped; resizing {n_samples} -> {row}")
+                for dset in [d_flux_log, d_flux_log_med, d_flux_raw,
+                             d_z, d_snr_mean, d_snr_med, d_noise, d_ids, d_norm_cmn, d_norm_cmd, d_norm_med, *param_dsets.values()]:
+                    dset.resize(row, axis=0)
+
+            if skipped:
+                group.create_dataset("skipped", data=np.array(skipped, dtype="S"))
+            if skipped_norm_cont_negative:
+                print(f"{split_name}: dropped {len(skipped_norm_cont_negative)} — NORM_CONT <= 0")
+                group.create_dataset("skipped_norm_con",
+                                     data=np.array(skipped_norm_cont_negative, dtype="S"))
+
+          
+
+    print(f"\n🏁 Successfully compiled {h5_filename}")
+
+
 
 def check_h5_samples(h5_path, norm):
     """
@@ -389,28 +645,113 @@ def check_h5_structure(name, obj):
     elif isinstance(obj, h5py.Dataset):
         print(f"{indent}📊 Dataset: {name} | Shape: {obj.shape} | Type: {obj.dtype}")
 
+def check_agn_h5_samples(h5_path, norm):
+    """
+    Checks random samples from the H5 file.
+    """
+
+    with h5py.File(h5_path, "r") as hf:
+        # 1. Access the wavelength grid from the root attributes
+        if "wavelengths" not in hf.attrs:
+            print("Error: 'wavelengths' attribute not found!")
+            return
+        wave = hf.attrs["wavelengths"]
+
+        # 2. Setup the plot
+        fig, axes = plt.subplots(3, 1, figsize=(12, 10), sharex=True)
+
+        # Match the group names from your compilation script
+        splits = ["validation", "test"]
+
+        # loop for writing
+        for i, split in enumerate(splits):
+            if split not in hf:
+                print(f"Warning: Group '{split}' not found in file.")
+                continue
+
+            # Access the chosen flux dataset
+            dset_raw = hf[split]["raw_flux"]
+            # dset_norm_cont = hf[split]["normalized_flux_cont"]
+            # dset_norm_med = hf[split]["normalized_flux_med"]
+            dset_log = hf[split]["log_scale_flux"]
+            dset_log_med = hf[split]["log_scale_flux_med"]
+            n_samples = dset_raw.shape[0]
+
+            if n_samples == 0:
+                print(f"Warning: No samples found in group '{split}'.")
+                continue
+
+            # 3. Pick a random index
+            rand_idx = random.randint(0, n_samples - 1)
+
+            # 4. Load the data
+            flux = dset_raw[rand_idx]
+            norm_flux = dset_log[rand_idx]
+            norm_flux_med = dset_log_med[rand_idx]
+            z = hf[split]["redshift"][rand_idx]
+            obj_id = hf[split]["obj_id"][rand_idx].decode("utf-8")
+
+            # Print to console for manual zero-check in the gaps
+            print(f"--- {split.upper()} (Index {rand_idx}) ---")
+            print(f"ID: {obj_id}")
+
+            # 5. Plotting
+            if norm:
+                axes[i].step(wave, norm_flux, where="mid", color="green", lw=0.8)
+                axes[i].set_title(
+                    f"Split: {split.upper()} | ID: {obj_id} | z: {z:.4f} (normalized spec)"
+                )
+            # elif norm_med:
+            #     axes[i].step(wave, norm_flux_med, where="mid", color="green", lw=0.8)
+            #     axes[i].set_title(
+            #         f"Split: {split.upper()} | ID: {obj_id} | z: {z:.4f} (normalized spec (according to cont median))"
+            #     )
+            else:
+                axes[i].step(wave, flux, where="mid", color="midnightblue", lw=0.8)
+                axes[i].set_title(
+                    f"Split: {split.upper()} | ID: {obj_id} | z: {z:.4f} "
+                )
+            axes[i].set_ylabel("Flux")
+            axes[i].grid(alpha=0.3)
+
+            # Highlight zeros (gaps) for visual confirmation
+            # Only plot where flux is exactly 0
+            gaps = np.where(flux == 0)[0]
+            if len(gaps) > 0:
+                axes[i].plot(
+                    wave[gaps],
+                    flux[gaps],
+                    "r|",
+                    markersize=2,
+                    alpha=0.3,
+                    label="Zero-Gap",
+                )
+
+        axes[2].set_xlabel(r"Wavelength ($\AA$)")
+        plt.tight_layout()
+        # plt.show()
+        plt.savefig("eg_samples_agn.pdf")
+
 ######################################################################################
 ####################################### MAIN #########################################
 ######################################################################################
 def main():
 
-    output_dir = "processed_spectra"
-    h5_filename = "all_spectra_float32_v3.h5"
+    ##### AGN #####
 
-    result = sklearn_split_data(
-            output_dir, h5_filename
-        )
+    output_dir = "processed_agn_spectra"
+    h5_filename = "all_agn_float32.h5"
+    result = sklearn_split_agn(
+        output_dir, h5_filename
+    )
     if result is None:
         print("No files found. Exiting.")
         return
-    files, train_files, valid_files, test_files = result
-    # print(train_files)
-    # print(valid_files)
-    # print(test_files)
+    files, valid_files, test_files = result
 
     reference_fits = files[0]  # reference fits for parameter keys
 
-    save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_files)
+    save_h5_agn(reference_fits, h5_filename, files, valid_files, test_files)
 
     # check h5
     with h5py.File(h5_filename, "r") as hf:
@@ -423,7 +764,42 @@ def main():
     print("\n---------------------------------------------\n")
 
     # check_h5_samples(h5_filename, norm = False)
-    check_h5_samples(h5_filename, norm=True)
+    check_agn_h5_samples(h5_filename, norm=True)
+
+
+
+    # ##### normal #####
+
+    # output_dir = "processed_spectra"
+    # h5_filename = "all_spectra_float32.h5"
+    # result = sklearn_split_data(
+    #         output_dir, h5_filename
+    #     )
+
+    # if result is None:
+    #     print("No files found. Exiting.")
+    #     return
+    # files, train_files, valid_files, test_files = result
+    # # print(train_files)
+    # # print(valid_files)
+    # # print(test_files)
+
+    # reference_fits = files[0]  # reference fits for parameter keys
+
+    # save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_files)
+
+    # # check h5
+    # with h5py.File(h5_filename, "r") as hf:
+    #     print(f"\n📑 Root Attributes:")
+    #     for attr in hf.attrs:
+    #         print(f"  - {attr}: {hf.attrs[attr]}")
+
+    #     print("\n🌳 File Structure:")
+    #     hf.visititems(check_h5_structure)
+    # print("\n---------------------------------------------\n")
+
+    # # check_h5_samples(h5_filename, norm = False)
+    # check_h5_samples(h5_filename, norm=True)
 
 if __name__ == "__main__":
     main()

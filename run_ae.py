@@ -60,6 +60,7 @@ def main():
 	)
 
 	parser.add_argument("-f", "--filename", default="all_spectra_float32_v2.h5") # also all_spectra_float32_med.h5 (same but with median norm flux)
+	parser.add_argument("-a", "--agn_file", default="all_agn_float32.h5")
 	parser.add_argument("-p", "--project_name", default="unspecified_project")
 	parser.add_argument("-ft", "--flux_type", default="log_scale_flux") # also log_scale_flux_med
 
@@ -253,6 +254,7 @@ def main():
 		batch_size_train = batch_size_valid = 64
 
 	DATA = args.filename
+	AGN_DATA = args.agn_file
 
 	# default is continuum normalized, log-scaled data
 	# train = H5SpecDataset(DATA, split="train", flux_type=flux_type, standardize=standardize, preload=preload, device=device)
@@ -261,6 +263,8 @@ def main():
 	datasets, preload_mode = make_datasets(DATA, splits=["train", "validation"], flux_type=flux_type, standardize=standardize, preload_request=preload, device=device)
 	train = datasets["train"]
 	valid = datasets["validation"]
+
+
 
 	# update config with requested and rsolved preloading mode
 	wandb.config.update({"preload_requested": args.preload,
@@ -287,6 +291,7 @@ def main():
 	test_params = {
 		"test_name": TEST_NAME,
 		"data_file": DATA,
+		"agn_data": AGN_DATA,
 		"flux_type": flux_type,
 		"standardize" : standardize,
 		"ae_type": args.model_type,
@@ -328,6 +333,7 @@ def main():
 		"n_train":        len(train),
 		"n_valid":        len(valid),
 		"filename":       DATA,
+		"agn_data":       AGN_DATA,
 		"flux_type":      flux_type,
 	}, allow_val_change=True)
 
@@ -379,8 +385,7 @@ def main():
 		valid_loss_stats = funcs.model_stats(valid_ev, test_params, best=True)
 
 		wandb.log({
-			# p95/max matter most: you're building an ANOMALY detector, so the TAIL
-			# is the product. A config with a great mean and a flat tail is useless.
+
 			"loss_dist/valid_scaled_mean":     valid_loss_stats["scaled"]["mean"],
 			"loss_dist/valid_scaled_median":   valid_loss_stats["scaled"]["median"],
 			"loss_dist/valid_scaled_p95":      valid_loss_stats["scaled"]["p95"],
@@ -454,6 +459,58 @@ def main():
 				plt.close(fig)
 
 		funcs.log_summary(train_ev, valid_ev, test_params, test=False)
+
+	##################################################
+	# use best model to predict normal and agn *validation sets*
+	# want histograms N vs objcetive value (do for valid unscaled loss and log scale mse)
+	
+	normal_scaled = valid_ev["loss_scaled"]
+	normal_unscaled = valid_ev["loss_unscaled"]
+
+	agn_dataset = H5SpecDataset(AGN_DATA, split="validation", flux_type=flux_type, standardize=standardize, preload=preload, device=device)
+	agn_loader = make_dataloader(agn_dataset, batch_size=batch_size_valid, shuffle=False, num_workers=num_workers)
+
+	agn_ev = funcs.evaluate(agn_loader, best_model, test_params, want_latent=True, want_examples=False, test=TESTING)
+	agn_scaled = agn_ev["loss_scaled"]
+	agn_unscaled = agn_ev["loss_unscaled"]
+
+	def to_numpy(arr):
+		if hasattr(arr, "detach"):
+			return arr.detach().cpu().numpy()
+		return np.asarray(arr)
+
+	norm_scaled = to_numpy(normal_scaled)
+	norm_unscaled = to_numpy(normal_unscaled)
+	a_scaled = to_numpy(agn_scaled)
+	a_unscaled = to_numpy(agn_unscaled)
+
+	# Create a 2-row subplot figure
+	fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=False)
+
+	# --- 1. Scaled Loss Histogram ---
+	ax1.hist(norm_scaled, bins=50, alpha=0.6, label='Normal Galaxies', density=True, color='royalblue', edgecolor='none')
+	ax1.hist(a_scaled, bins=50, alpha=0.6, label='AGNs (Anomalies)', density=True, color='crimson', edgecolor='none')
+	ax1.set_title('Reconstruction Loss Distribution - Scaled')
+	ax1.set_xlabel('Scaled Loss')
+	ax1.set_ylabel('Density')
+	ax1.legend(loc='upper right')
+	ax1.grid(alpha=0.3)
+
+	# --- 2. Unscaled Loss Histogram ---
+	ax2.hist(norm_unscaled, bins=50, alpha=0.6, label='Normal Galaxies', density=True, color='royalblue', edgecolor='none')
+	ax2.hist(a_unscaled, bins=50, alpha=0.6, label='AGNs (Anomalies)', density=True, color='crimson', edgecolor='none')
+	ax2.set_title('Reconstruction Loss Distribution - Unscaled')
+	ax2.set_xlabel('Unscaled Loss')
+	ax2.set_ylabel('Density')
+	ax2.legend(loc='upper right')
+	ax2.grid(alpha=0.3)
+
+	plt.tight_layout()
+	plt.savefig("agn_vs_normal_loss_hists.pdf")
+	# plt.show()
+
+
+
 
 	wandb.finish()
 

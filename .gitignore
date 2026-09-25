@@ -54,3 +54,6 @@ sae_*
 loss_*
 *.png
 wandb*
+
+agn_spectra/
+AGN_temp_*

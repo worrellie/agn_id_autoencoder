@@ -354,7 +354,6 @@ def log_final_stats(losses_per_epoch):
 		"final/valid_loss": losses_per_epoch["valid_total"][-1],
 		#
 		"final/best_valid_scaled":       min(losses_per_epoch["valid_total"]),
-		"final/best_valid_unscaled_mse": min(valid_unscaled),   # sweep target
 		"final/best_valid_log_mse":      min(valid_mse),
 		#
 		# ── the two selection epochs, like-for-like (both recon-only) ──

@@ -137,7 +137,6 @@ def get_valid_triplets(spec_dir):
             if band not in ("RI", "YJ", "H"):
                 continue
             buckets.setdefault(base, {})[band] = os.path.join(zpath, s)
-
         for base in sorted(buckets):          # sorted -> reproducible order
             bands = buckets[base]
             if not all(b in bands for b in ("RI", "YJ", "H")):
@@ -146,6 +145,72 @@ def get_valid_triplets(spec_dir):
             triplet = [bands["RI"], bands["YJ"], bands["H"]]
             z = os.path.basename(triplet[0]).split("_z")[1].split("_")[0]
             yield triplet, float(z)
+
+def get_valid_agn_triplets(agn_dir):
+
+    # if no agn file, end func
+    if not os.path.exists(agn_dir):
+        return
+
+    # agn have different stucture- look in spece folder then in each exposure
+    # time folder
+    for exp_dir in sorted(os.listdir(agn_dir)):
+        exp_path = os.path.join(agn_dir, exp_dir)
+        if not os.path.isdir(exp_path):
+            continue
+
+        buckets = {}
+        for s in os.listdir(exp_path):
+            if not s.startswith("AGN_temp_"):
+                # skip files that are not AGN spectra
+                continue
+
+        # Example filename: AGN_temp_z0.9_ebv0.2_L300044.0_emline0.5_fragal0.0_2h_YJ.fits
+            # Split off the file extension and the band (RI, YJ, H)
+            parts = s.rsplit("_", 1)
+            if len(parts) < 2:
+                continue
+            band = parts[1].replace(".fits", "")
+            if band not in ("RI", "YJ", "H"):
+                continue
+            
+            # The base name is everything before the band identifier
+            base = parts[0]
+            buckets.setdefault(base, {})[band] = os.path.join(exp_path, s)
+
+            # base = s.split("_z")[0]
+            # band = s.rsplit("_", 1)[1].replace(".fits", "")
+            # if band not in ("RI", "YJ", "H"):
+            #     continue
+            # buckets.setdefault(base, {})[band] = os.path.join(exp_path, s)
+
+
+        for base in sorted(buckets):
+            bands = buckets[base]
+            if not all(b in bands for b in ("RI", "YJ", "H")):
+                print(f"Missing band for AGN base: {base}", file=sys.stderr)
+                continue
+            triplet = [bands["RI"], bands["YJ"], bands["H"]]
+            
+            # Parse redshift from the filename (e.g., _z0.9_)
+            print(base)
+            try:
+                z_str = base.split("_z")[1].split("_")[0]
+                z = float(z_str)
+            except Exception:
+                z = 0.9  # Fallback default matching your target redshift
+                
+            yield triplet, z
+        
+        # for base in sorted(buckets):
+        #     bands = buckets[base]
+        #     if not all(b in bands for b in ("RI", "YJ", "H")):
+        #         print(f"missing band for {base}, skipping", file=sys.stderr)
+        #         continue
+        #     triplet = [bands["RI"], bands["YJ"], bands["H"]]
+        #     z = os.path.basename(triplet[0]).split("_z")[1].split("_")[0]
+        #     # print(f"yielding AGN triplet for {base} with z={z}")
+        #     yield triplet, float(z)
 
 def get_valid_triplets_deprecated_2(spec_dir):
 
@@ -409,17 +474,20 @@ def save_spec( flux, l, original_z, snr_and_noise, norm_factors, ref_cat_row, in
 
     for col, val in ref_cat_row.items():
         # print(make_col_name_fits_compatible(col))
-        hdr[make_col_name_fits_compatible(col)] = val
+        if val is not None and not (isinstance(val, (float,np.floating)) and np.isnan(val)):
+            hdr[make_col_name_fits_compatible(col)] = val
 
     hdu = fits.BinTableHDU.from_columns([col1, col2], header=hdr)
 
     out_name = f"{infile_base}_{noise_type}_deZ_rebinned.fits"
 
+    # print(f"Saving processed spectrum to: {out_name}")
+
     hdu.writeto(os.path.join(outdir, out_name), overwrite=True)
 
     return
 
-def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
+def process_single_spec(triplet, common_vals, processed_folder = "processed_spectra", grid_size = 4.0, de_z = 0.9):
 
     resampler = FluxConservingResampler(extrapolation_treatment="truncate")
 
@@ -428,7 +496,7 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
     base_name = os.path.basename(ri_p).replace("_RI.fits", "")
     base_dir = Path(ri_p).parent.parent.parent  # parent of spectra/ dir (parent of parent of triplet)
 
-    output_dir = base_dir / "processed_spectra" # when var on left of / is pathlib.Path, / means to join paths
+    output_dir = base_dir / processed_folder # when var on left of / is pathlib.Path, / means to join paths
     output_dir.mkdir(parents=True, exist_ok=True) # create dir if it doesn't exist
 
     out_path = output_dir / f"{base_name}_noisy_deZ_rebinned.fits"
@@ -515,6 +583,134 @@ def process_single_spec(triplet, common_vals, grid_size = 4.0, de_z = 0.9):
         save_spec(final_spec_flux, final_spec_l, redshift, snr_and_noise, norm_factors, ref_cat_row, base_name, output_dir,)
 
         return base_name  # Useful for tracking progress
+    
+    except Exception as e:
+        print(
+            f"\nERROR: Worker failed on file: {base_name}", file=sys.stderr, flush=True
+        )
+        print(f"Error details: {e}")
+        # Re-raise the error if you want the whole job to stop,
+        # or return None if you want the job to keep going for other files
+        raise e
+
+def parse_agn_filename(base_name):
+    """
+    Parses parameters from filenames like:
+    AGN_temp_z0.9_ebv0.2_L300044.0_emline0.5_fragal0.0_2h
+    """
+    params = {}
+    parts = base_name.split("_")
+    
+    for part in parts:
+        if part.startswith("ebv"):
+            params["EBV"] = float(part[3:])
+        elif part.startswith("L"):
+            params["L_VAL"] = float(part[1:])
+        elif part.startswith("emline"):
+            params["EMLINE"] = float(part[6:])
+        elif part.startswith("fragal"):
+            params["FRAGAL"] = float(part[6:])
+        elif part in ("2h", "8h"):
+            params["EXPTIME"] = part[0:1]
+            
+    return params
+
+def process_single_agn_spec(triplet, common_vals, processed_folder = "processed_agn_spectra", grid_size = 4.0, de_z = 0.9):
+
+    resampler = FluxConservingResampler(extrapolation_treatment="truncate")
+
+    t, redshift = triplet
+    ri_p, yj_p, h_p = t[0], t[1], t[2]
+    base_name = os.path.basename(ri_p).replace("_RI.fits", "")
+    base_dir = Path(ri_p).parent.parent.parent  # parent of spectra/ dir (parent of parent of triplet)
+
+    output_dir = base_dir / processed_folder # when var on left of / is pathlib.Path, / means to join paths
+    output_dir.mkdir(parents=True, exist_ok=True) # create dir if it doesn't exist
+
+    out_path = output_dir / f"{base_name}_noisy_deZ_rebinned.fits"
+    if out_path.exists():
+        return base_name
+
+    try:
+        
+        original_de_z_flux, original_de_z_l = [], []
+        original_flux_rest, original_l_rest = [], []
+        channel_pairs = []
+
+        for channel in [ri_p, yj_p, h_p]:
+            flux, l, _ = get_channel_data(
+                channel
+            )  # Assuming t=1 is hardcoded or parsed
+
+            # de-redshift each channel to rest and given z (0.9)
+            flux_de_z, l_de_z = deredshift_channel(flux, l, redshift, de_z=de_z)
+            flux_rest, l_rest = deredshift_channel(flux, l, redshift, de_z=0.0)
+
+            original_de_z_flux.extend(flux_de_z)
+            original_de_z_l.extend(l_de_z)
+            original_flux_rest.extend(flux_rest)
+            original_l_rest.extend(l_rest)
+
+            # rebin each channel to common grid
+            f_rebinned, l_rebinned = rebin_channel(
+                flux_de_z, l_de_z, resampler, grid_size=grid_size
+            )
+            channel_pairs.append([f_rebinned, l_rebinned])
+
+        # combine channels to one spectrum
+        spec_flux, spec_l = merge_channels(channel_pairs, grid_size=grid_size)
+        # crop spectrum to common wavelength region
+        final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
+
+        # check for fully masked spectra
+        mask = final_spec_flux == 0 # mask only of CROPPED spectrum
+        if mask.all():
+            print(f"fully masked spec: {base_name}")
+
+        # get normalization factors (saved and stored in fits spectrum )
+        
+        # cont_mean, noise, snr = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
+        noise_info = calc_SNR( np.asarray(original_flux_rest), np.asarray(original_l_rest))
+
+        noise = noise_info['noise']
+        cont_mean = noise_info['continuum_mean']
+        cont_median = noise_info['continuum_median']
+        snr_mean = noise_info['snr_mean']
+        snr_median = noise_info['snr_median']
+
+        # if no continuum flux measurement OR
+        # if noise and snr are 0, spec is invalid
+        # MEAN
+        if (noise == 0.0 and snr_mean == 0.0) or (cont_mean == 0.0 or np.isnan(cont_mean) or cont_mean is None):
+            print(f"invalid spec {base_name} with ({cont_mean}, {noise}, {snr_mean})")
+        # MEDIAN
+        if (noise == 0.0 and snr_median == 0.0) or (cont_median == 0.0 or np.isnan(cont_median) or cont_median is None):
+            print(f"invalid spec {base_name} with ({cont_median}, {noise}, {snr_median})")
+        # I guess keep, but not sure im using it..
+        full_spec_median = np.median(final_spec_flux[~mask])
+        if  (full_spec_median == 0.0 or np.isnan(full_spec_median) or full_spec_median is None):
+            print(f"invalid spec {base_name} with {full_spec_median}")
+        
+        norm_factors = {'continuum_mean' : cont_mean,
+                        'continuum_median' : cont_median,
+                        # 'noise' : noise,
+                        # 'snr_mean' : snr_mean,
+                        # 'snr_median' : snr_median,
+                        'full_spec_median' : full_spec_median}
+        snr_and_noise = {'snr_mean' : snr_mean,
+                         'snr_median' :  snr_median,
+                         'noise' : noise}
+
+        agn_params = parse_agn_filename(base_name)
+
+        # save spectrum in fits
+        # nan for AGN since not cosmos sources i think?
+        ref_cat_row = {c: np.nan for c in _COLS} if _COLS is not None else {}
+        ref_cat_row.update(agn_params) # This maps ebv, L, emline, etc. straight into header keywords!
+
+        save_spec(final_spec_flux, final_spec_l, redshift, snr_and_noise, norm_factors, ref_cat_row, base_name, output_dir,)
+
+        return base_name  # Useful for tracking progress
 
     except Exception as e:
         print(
@@ -576,13 +772,17 @@ def main():
         cpus = multiprocessing.cpu_count() - 1  # Leave one core for the OS
         print(f"Starting parallel processing on {cpus} cores...")
 
-    triplet_generator = get_valid_triplets("spectra")
+    triplet_generator = get_valid_agn_triplets("agn_spectra")
+    # triplet_generator = get_valid_triplets("spectra")
 
     GRID_SIZE = 4.0  # Angstroms, for rebinning
 
     # notes for me: partial returns new function with some of the arguments 'frozen'/ already set for passing to executor
     # frozen args are the ones that every worker will use and will have the same.
-    worker_function = partial(process_single_spec, common_vals = common_vals, grid_size = GRID_SIZE, de_z = Z_TARGET)
+
+    # worker_function = partial(process_single_spec, common_vals = common_vals, grid_size = GRID_SIZE, de_z = Z_TARGET)
+    worker_function = partial(process_single_agn_spec, common_vals = common_vals, processed_folder = "processed_agn_spectra", grid_size = GRID_SIZE, de_z = Z_TARGET)
+
 
     # notes for me: execute extra processes. each extra process is a separate worker.
     # each separate worker is a separate python process, so they don't share memory.
@@ -597,7 +797,7 @@ def main():
 
         for finished_base_name in results:
             if finished_base_name:
-                # print(f"Finished processing: {finished_base_name}")
+                print(f"Finished processing: {finished_base_name}")
                 pass
 
     #####################################################################################################################
