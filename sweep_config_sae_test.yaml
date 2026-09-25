@@ -1,0 +1,35 @@
+# Smoke test: checks the full train -> evaluate -> log loop end to end.
+# Not for hyperparameter search. Expect 2 very short runs.
+program: run_ae.py
+method: grid            # deterministic; grid over the one list below = 2 runs
+metric:
+  name: final/best_valid_log_mse
+  goal: minimize
+# No early_terminate: runs are too short for it to matter.
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -f
+  - all_spectra_float32_v3.h5
+  - -ft
+  - log_scale_flux
+  - -p
+  - sae_pipeline_test     # separate project so test runs don't pollute real sweeps
+  - -n
+  - --sae
+
+parameters:
+  epochs:
+    value: 2
+  latent_size:
+    values: [16, 32]      # two values -> confirms the agent picks up a second run
+  learn_rate:
+    value: 1.0e-4
+  weight_decay:
+    value: 1.0e-6
+  n_layers:
+    value: 1
+  activation:
+    value: LeakyReLU
