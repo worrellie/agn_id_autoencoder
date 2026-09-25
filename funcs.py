@@ -325,10 +325,8 @@ def _to_norm_space(x_scaled, train_mean, train_std, standardize, flux_type, mask
 		x = x_scaled.clone()
 
 	# Step 2: invert flux-space transform
-	if flux_type == "log_scale_flux":
+	if flux_type in ("log_scale_flux", "log_scale_flux_med"):
 		x = torch.sign(x) * torch.expm1(torch.clamp(torch.abs(x), max=30.0)) # clampto not get any Nans/infs and mess everything up
-	if  flux_type == "log_scale_flux_med":
-			x = torch.sign(x) * torch.expm1(torch.clamp(torch.abs(x), max=30.0)) # clampto not get any Nans/infs and mess everything up
 	elif flux_type == "normalized_flux_cont":
 		pass # not added yet
 	elif flux_type == "normalized_flux_med":
