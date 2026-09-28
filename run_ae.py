@@ -19,7 +19,6 @@ from datahandling import H5SpecDataset
 from datahandling import make_datasets, make_dataloader, load_norm_stats
 import autoencoder as ae
 import training
-from anomaly_metrics import all_agn_metrics, plot_agn_vs_normal
 
 
 import argparse
@@ -29,6 +28,7 @@ import wandb
 
 import logging
 import plotting
+from plotting import all_agn_metrics, plot_agn_vs_normal
 
 logger = logging.getLogger(__name__)
 
