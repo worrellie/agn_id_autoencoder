@@ -19,10 +19,32 @@ import logging
 
 logger = logging.getLogger(__name__)
 
+_NORM_KEYS = {
+	"raw_flux": ("raw_mean", "raw_std"),
+	"normalized_flux": ("norm_mean", "norm_std"),
+	"normalized_flux_cont": ("norm_mean_cont", "norm_std_cont"),
+	"normalized_flux_med": ("norm_mean_med", "norm_std_med"),
+	"log_scale_flux": ("norm_mean_log", "norm_std_log"),
+	"log_scale_flux_med": ("norm_mean_log_med", "norm_std_log_med")
+}
+
+def load_norm_stats(data_path, flux_type):
+
+	if flux_type not in _NORM_KEYS:
+		raise ValueError(f"Unknown flux_type '{flux_type}'")
+	mean_key, std_key = _NORM_KEYS[flux_type]
+	with h5py.File(data_path, "r") as hf:
+		if "train" not in hf:
+			raise ValueError(f"{data_path} has no train split — normalisation stats must "
+							 "come from the training file or a saved checkpoint")
+		return {"flux_type": flux_type,
+				"mean": float(hf.attrs[mean_key]),
+				"std":  float(hf.attrs[std_key]),
+				"source": str(data_path)}
 
 class H5SpecDataset(torch.utils.data.Dataset):
 	
-	def __init__(self, data_path, split, flux_type="log_scale_flux", standardize = True, preload="none", device = "cpu"):
+	def __init__(self, data_path, split, flux_type="log_scale_flux", standardize = True, preload="none", device = "cpu", norm_stats = None):
 		self.data_path = data_path
 		self.split = split
 		self.flux_type = flux_type
@@ -30,27 +52,42 @@ class H5SpecDataset(torch.utils.data.Dataset):
 		self.preload = preload
 		self.device = device
 
-		# if self.flux_type == "normalized_flux_cont":
-		# 	mean_key = "norm_mean_cont"
-		# 	std_key = "norm_std_cont"
-		if self.flux_type == "raw_flux":
-			mean_key = "raw_mean"
-			std_key = "raw_std"
-		# elif self.flux_type == "normalized_flux_med":
-		# 	mean_key = "norm_mean_med"
-		# 	std_key = "norm_std_med"
-		elif self.flux_type == "log_scale_flux":
-			mean_key = "norm_mean_log"
-			std_key = "norm_std_log"
-		elif self.flux_type == "log_scale_flux_med":
-			mean_key = "norm_mean_log_med"
-			std_key = "norm_std_log_med"
-		else:
-			logger.info("WARNING: INVALID flux type, defaulting to raw")
-			self.flux_type = "raw_flux"
-			mean_key = "raw_mean"
-			std_key = "raw_std"
+		# # if self.flux_type == "normalized_flux_cont":
+		# # 	mean_key = "norm_mean_cont"
+		# # 	std_key = "norm_std_cont"
+		# if self.flux_type == "raw_flux":
+		# 	mean_key = "raw_mean"
+		# 	std_key = "raw_std"
+		# # elif self.flux_type == "normalized_flux_med":
+		# # 	mean_key = "norm_mean_med"
+		# # 	std_key = "norm_std_med"
+		# elif self.flux_type == "log_scale_flux":
+		# 	mean_key = "norm_mean_log"
+		# 	std_key = "norm_std_log"
+		# elif self.flux_type == "log_scale_flux_med":
+		# 	mean_key = "norm_mean_log_med"
+		# 	std_key = "norm_std_log_med"
+		# else:
+		# 	logger.info("WARNING: INVALID flux type, defaulting to raw")
+		# 	self.flux_type = "raw_flux"
+		# 	mean_key = "raw_mean"
+		# 	std_key = "raw_std"
 		
+		if flux_type not in _NORM_KEYS:
+			raise ValueError(f"Unknown flux_type '{flux_type}'")
+
+		self.norm_stats = norm_stats
+		if standardize:
+			if norm_stats is None:
+				raise ValueError("standardize=True requires norm_stats from the TRAINING data "
+								 "(load_norm_stats(train_file, flux_type) or from a checkpoint)")
+			if norm_stats["flux_type"] != flux_type:
+				raise ValueError(f"norm_stats are for '{norm_stats['flux_type']}' "
+								 f"but this dataset uses '{flux_type}'")
+			self.mean, self.std = norm_stats["mean"], norm_stats["std"]
+		else:
+			self.mean, self.std = None, None
+
 		self.hf = None
 		self.data = None
 		self.mask = None
@@ -61,8 +98,8 @@ class H5SpecDataset(torch.utils.data.Dataset):
 		# dont need to initialise as None, because code is unconditional
 		with h5py.File(self.data_path, "r") as hf:
 			self.l = hf.attrs["wavelengths"][:]
-			self.mean = float(hf.attrs[mean_key])
-			self.std = float(hf.attrs[std_key])
+			# self.mean = float(hf.attrs[mean_key])
+			# self.std = float(hf.attrs[std_key])
 			dset = hf[self.split][self.flux_type]
 			self.len      = dset.shape[0]
 			self.n_pixels = dset.shape[1]
@@ -156,7 +193,7 @@ class H5SpecDataset(torch.utils.data.Dataset):
 		return self.snr
 
 
-def make_datasets(data_path, splits, flux_type, standardize, device, preload_request="auto"):
+def make_datasets(data_path, splits, flux_type, standardize, device, preload_request="auto", norm_stats = None):
 
 
 	# order of preference for preloading/ streaming. if not auto, do not downgrade
@@ -187,7 +224,7 @@ def make_datasets(data_path, splits, flux_type, standardize, device, preload_req
 
 		try:
 			ds = {s: H5SpecDataset(data_path, split=s, flux_type = flux_type, standardize = standardize, 
-						  preload=mode, device = device) for s in splits}
+						  preload=mode, device = device, norm_stats = norm_stats) for s in splits}
 			logger.info(f"preload resolved:{preload_request} -> {mode}")
 			return ds, mode
 		except torch.cuda.OutOfMemoryError as e:

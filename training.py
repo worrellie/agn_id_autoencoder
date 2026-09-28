@@ -30,6 +30,8 @@ class Trainer:
 
 		self.device = device
 
+		self.test_params = test_params
+		self.norm_stats = None
 		self.test_name = test_params["test_name"]
 		self.model = model
 		self.best_model = None
@@ -84,8 +86,11 @@ class Trainer:
 		standardize = ds.standardize
 		flux_type = ds.flux_type
 
+		self.norm_stats = ds.norm_stats
+
 		if valid_loader is not None:
-			assert train_mean == valid_loader.dataset.mean
+			assert valid_loader.dataset.norm_stats == self.norm_stats, \
+				"validation set is not standardised with the training stats"
 			assert standardize == valid_loader.dataset.standardize
 
 		clip = False
@@ -365,9 +370,12 @@ class Trainer:
 		
 		# when at end of training, save (if not a test)
 		if not self.test:
-			save_path_dict = path.Path(
-				self.test_name, f"{self.test_name}_final_model_state_dict.pt")  # overwrite is default
-			torch.save(self.model.state_dict(), save_path_dict)
+			save_path = path.Path(self.test_name, f"{self.test_name}_final_model.pt")
+			self.checkpoint(self.model, save_path, epoch=epoch,
+							metric=valid_mses[-1] if valid_mses else None)
+			# save_path_dict = path.Path(
+			# 	self.test_name, f"{self.test_name}_final_model_state_dict.pt")  # overwrite is default
+			# torch.save(self.model.state_dict(), save_path_dict)
 			# save_path_model = path.Path(self.test_name, f"{self.test_name}_final_model.pt")
 			# torch.save(self.model, save_path_model)
 
@@ -404,6 +412,8 @@ class Trainer:
 			'epoch':       epoch,                      # WHICH epoch this is
 			'metric':      metric,                     # what it scored
 			'metric_name': 'valid_mse',       # and on what
+			'norm_stats':  self.norm_stats,    # and the normalization statistics
+			'test_params': self.test_params,  # and the test parameters
 		}
 		if optimizer is not None:
 			save_dict['optimizer'] = optimizer.state_dict()

@@ -12,12 +12,16 @@ from torch.distributions.normal import Normal
 import math
 import pathlib as path
 import h5py
+import json
 
 import funcs
 from datahandling import H5SpecDataset
-from datahandling import make_datasets, make_dataloader
+from datahandling import make_datasets, make_dataloader, load_norm_stats
 import autoencoder as ae
 import training
+from anomaly_metrics import all_agn_metrics, plot_agn_vs_normal
+
+
 import argparse
 import time
 
@@ -256,11 +260,13 @@ def main():
 	DATA = args.filename
 	AGN_DATA = args.agn_file
 
+	norm_stats = load_norm_stats(DATA, flux_type=flux_type) if standardize else None
+	
 	# default is continuum normalized, log-scaled data
 	# train = H5SpecDataset(DATA, split="train", flux_type=flux_type, standardize=standardize, preload=preload, device=device)
 	# valid = H5SpecDataset(DATA, split="validation", flux_type=flux_type, standardize=standardize, preload=preload, device=device)
 
-	datasets, preload_mode = make_datasets(DATA, splits=["train", "validation"], flux_type=flux_type, standardize=standardize, preload_request=preload, device=device)
+	datasets, preload_mode = make_datasets(DATA, splits=["train", "validation"], flux_type=flux_type, standardize=standardize, preload_request=preload, device=device, norm_stats=norm_stats)
 	train = datasets["train"]
 	valid = datasets["validation"]
 
@@ -294,6 +300,7 @@ def main():
 		"agn_data": AGN_DATA,
 		"flux_type": flux_type,
 		"standardize" : standardize,
+		"norm_stats": norm_stats,
 		"ae_type": args.model_type,
 		"config": CONFIG,
 		"input_size": INPUT_SIZE,
@@ -328,6 +335,7 @@ def main():
 		"architecture":   CONFIG,
 		"n_layers":       len(CONFIG),
 		"standardize":    standardize,
+		"norm_stats":     norm_stats,
 		"input_size":     INPUT_SIZE,
 		"early_stopping": EARLY_STOPPING,
 		"n_train":        len(train),
@@ -361,6 +369,17 @@ def main():
 		device, test_params, model, optimizer, early_stopping, BETA, test=TESTING
 	)
 	model, best_model, losses_per_epoch = trainer.train_ae(EPOCHS, train_loader, valid_loader=valid_loader, verbose=verb,)
+
+	# verify the saved best checkpoint rebuilds the same model with the same stats
+	if not TESTING:
+		ckpt_path = path.Path(TEST_NAME, f"{TEST_NAME}_best_model.pt")
+		reloaded, reloaded_stats, _ = funcs.load_model(ckpt_path, device)
+		assert reloaded_stats == norm_stats, "checkpoint norm_stats differ from training stats"
+		for (k, a), b in zip(best_model.state_dict().items(), reloaded.state_dict().values()):
+			assert torch.equal(a.to(device), b), f"checkpoint weights differ at {k}"
+		logger.info("checkpoint round-trip OK")
+		del reloaded
+	
 	stop = time.time()
 	#
 
@@ -467,48 +486,24 @@ def main():
 	normal_scaled = valid_ev["loss_scaled"]
 	normal_unscaled = valid_ev["loss_unscaled"]
 
-	agn_dataset = H5SpecDataset(AGN_DATA, split="validation", flux_type=flux_type, standardize=standardize, preload=preload, device=device)
+	agn_dataset = H5SpecDataset(AGN_DATA, split="validation", flux_type=flux_type, standardize=standardize, preload=preload, device=device, norm_stats=norm_stats)
 	agn_loader = make_dataloader(agn_dataset, batch_size=batch_size_valid, shuffle=False, num_workers=num_workers)
 
-	agn_ev = funcs.evaluate(agn_loader, best_model, test_params, want_latent=True, want_examples=False, test=TESTING)
-	agn_scaled = agn_ev["loss_scaled"]
-	agn_unscaled = agn_ev["loss_unscaled"]
+	agn_ev = funcs.evaluate(agn_loader, best_model, test_params, want_latent=True, want_examples=False, test=TESTING, label = "agn_validation")
 
-	# def to_numpy(arr):
-	# 	if hasattr(arr, "detach"):
-	# 		return arr.detach().cpu().numpy()
-	# 	return np.asarray(arr)
+	# ── AGN vs normal galaxies (both validation splits) ──
+	agn_stats = all_agn_metrics(valid_ev, agn_ev)
+	wandb.log(agn_stats)                  # also sets run summary -> sortable in the runs table
+	logger.info(agn_stats)
 
-	# norm_scaled = to_numpy(normal_scaled)
-	# norm_unscaled = to_numpy(normal_unscaled)
-	# a_scaled = to_numpy(agn_scaled)
-	# a_unscaled = to_numpy(agn_unscaled)
+	agn_fig = plot_agn_vs_normal(valid_ev, agn_ev, title=TEST_NAME)
+	wandb.log({"agn/loss_histograms": wandb.Image(agn_fig)})
 
-	# # Create a 2-row subplot figure
-	# fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=False)
-
-	# # --- 1. Scaled Loss Histogram ---
-	# ax1.hist(norm_scaled, bins=50, alpha=0.6, label='Normal Galaxies', density=True, color='royalblue', edgecolor='none')
-	# ax1.hist(a_scaled, bins=50, alpha=0.6, label='AGNs (Anomalies)', density=True, color='crimson', edgecolor='none')
-	# ax1.set_title('Reconstruction Loss Distribution - Scaled')
-	# ax1.set_xlabel('Scaled Loss')
-	# ax1.set_ylabel('Density')
-	# ax1.legend(loc='upper right')
-	# ax1.grid(alpha=0.3)
-
-	# # --- 2. Unscaled Loss Histogram ---
-	# ax2.hist(norm_unscaled, bins=50, alpha=0.6, label='Normal Galaxies', density=True, color='royalblue', edgecolor='none')
-	# ax2.hist(a_unscaled, bins=50, alpha=0.6, label='AGNs (Anomalies)', density=True, color='crimson', edgecolor='none')
-	# ax2.set_title('Reconstruction Loss Distribution - Unscaled')
-	# ax2.set_xlabel('Unscaled Loss')
-	# ax2.set_ylabel('Density')
-	# ax2.legend(loc='upper right')
-	# ax2.grid(alpha=0.3)
-
-	# plt.tight_layout()
-	# plt.savefig("agn_vs_normal_loss_hists.pdf")
-	# # plt.show()
-
+	if not TESTING:
+		agn_fig.savefig(path.Path(TEST_NAME, f"{TEST_NAME}_agn_vs_normal.pdf"))
+		with open(path.Path(TEST_NAME, f"{TEST_NAME}_agn_stats.json"), "w") as p:
+			json.dump(agn_stats, p, indent=4)
+	plt.close(agn_fig)
 
 	wandb.finish()
 

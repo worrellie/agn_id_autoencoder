@@ -103,7 +103,7 @@ def loss_calc_per_spec(x_hat, x, x_mask,):
 
 	return recon_loss
 
-def evaluate(loader, model, test_params, want_latent=False, want_examples=False, test=False):
+def evaluate(loader, model, test_params, want_latent=False, want_examples=False, test=False, label=None):
 	"""
 	ONE forward pass over a split. Replaces get_predictions + get_latent_space,
 	which each looped the whole split and both recomputed the same per-spec losses.
@@ -123,6 +123,7 @@ def evaluate(loader, model, test_params, want_latent=False, want_examples=False,
 
 	ds          = loader.dataset
 	d_split     = ds.split
+	d_split     = label or d_split
 	train_mean  = ds.mean
 	train_std   = ds.std
 	standardize = ds.standardize
@@ -392,3 +393,21 @@ def _fit_check(losses):
 
 	return {"fit/gap": gap, "fit/relative_gap": rel, "fit/best_epoch": best}
 
+def load_model(ckpt_path, device="cpu"):
+	"""Rebuild a saved model. Returns (model, norm_stats, test_params).
+	Build any dataset for this model with norm_stats=norm_stats."""
+	import autoencoder as ae
+	ckpt = torch.load(ckpt_path, map_location=device)
+	params, norm_stats = ckpt.get("test_params"), ckpt.get("norm_stats")
+	if params is None:
+		raise ValueError(f"{ckpt_path} predates norm_stats saving — cannot load safely")
+	if params["standardize"] and norm_stats is None:
+		raise ValueError(f"{ckpt_path} was trained standardised but has no norm_stats")
+
+	cls = {"StandardAutoencoder": ae.StandardAutoencoder,
+		   "VariationalAutoencoder": ae.VAEAutoencoder}[params["ae_type"]]
+	model = cls(params["config"], params["input_size"], params["latent_size"],
+				activation=params["activation_function"])
+	model.load_state_dict(ckpt["model"])
+	model.to(device).eval()
+	return model, norm_stats, params

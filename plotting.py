@@ -20,10 +20,10 @@ from sklearn.decomposition import PCA
 
 from sklearn.manifold import TSNE
 try:
-	import umap
-	_UMAP_AVAILABLE = True
+    import umap
+    _UMAP_AVAILABLE = True
 except ImportError:
-	_UMAP_AVAILABLE = False
+    _UMAP_AVAILABLE = False
 
 import wandb
 
@@ -35,327 +35,409 @@ import logging
 
 def plot_loss_epoch_avg(model_losses, test_params, test=False):
 
-	test_name = test_params["test_name"]
+    test_name = test_params["test_name"]
 
-	# plots loss in SCALED SPACE
+    # plots loss in SCALED SPACE
 
-	train_loss = model_losses["train_total"]
-	valid_loss = model_losses["valid_total"]
-	train_mse = model_losses["train_mse"]
-	valid_mse = model_losses["valid_mse"]
-	train_kl = model_losses["train_kl_raw"]
-	valid_kl = model_losses["valid_kl_raw"]
+    train_loss = model_losses["train_total"]
+    valid_loss = model_losses["valid_total"]
+    train_mse = model_losses["train_mse"]
+    valid_mse = model_losses["valid_mse"]
+    train_kl = model_losses["train_kl_raw"]
+    valid_kl = model_losses["valid_kl_raw"]
 
-	epochs = range(0, len(train_loss))
+    epochs = range(0, len(train_loss))
 
-	plt.style.use("fivethirtyeight")
-	fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(24, 6))
+    plt.style.use("fivethirtyeight")
+    fig, (ax1, ax2, ax3) = plt.subplots(1, 3, figsize=(24, 6))
 
-	# plot total loss (mse + kl)
-	ax1.plot(epochs, train_loss, label="Train Total", alpha=0.8)
-	ax1.plot(epochs, valid_loss, label="Valid Total", alpha=0.8, linestyle="--")
-	ax1.set_title(f"Total Loss (Beta={model_losses['beta']})")
-	ax1.set_xlabel("Epochs")
-	ax1.set_ylabel("Loss Value")
-	ax1.legend()
+    # plot total loss (mse + kl)
+    ax1.plot(epochs, train_loss, label="Train Total", alpha=0.8)
+    ax1.plot(epochs, valid_loss, label="Valid Total", alpha=0.8, linestyle="--")
+    ax1.set_title(f"Total Loss (Beta={model_losses['beta']})")
+    ax1.set_xlabel("Epochs")
+    ax1.set_ylabel("Loss Value")
+    ax1.legend()
 
-	# plot mse and kl divergence separately
-	ax2.plot(epochs, train_mse, label="Train MSE", color="tab:blue")
-	ax2.plot(epochs, valid_mse, label="Valid MSE", color="tab:blue", linestyle="--")
+    # plot mse and kl divergence separately
+    ax2.plot(epochs, train_mse, label="Train MSE", color="tab:blue")
+    ax2.plot(epochs, valid_mse, label="Valid MSE", color="tab:blue", linestyle="--")
 
-	# if kl diference is use (vae)
-	if any(k > 0 for k in train_kl):
-		ax2_kl = ax2.twinx()
-		ax2_kl.plot(
-			epochs, train_kl, label="Train KL (raw)", color="tab:red", alpha=0.6
-		)
-		ax2_kl.plot(
-			epochs,
-			valid_kl,
-			label="Valid KL (raw)",
-			color="tab:red",
-			alpha=0.6,
-			linestyle="--",
-		)
-		ax2_kl.set_ylabel("KL Divergence", color="tab:red")
-		ax2_kl.tick_params(axis="y", labelcolor="tab:red")
+    # if kl diference is use (vae)
+    if any(k > 0 for k in train_kl):
+        ax2_kl = ax2.twinx()
+        ax2_kl.plot(
+            epochs, train_kl, label="Train KL (raw)", color="tab:red", alpha=0.6
+        )
+        ax2_kl.plot(
+            epochs,
+            valid_kl,
+            label="Valid KL (raw)",
+            color="tab:red",
+            alpha=0.6,
+            linestyle="--",
+        )
+        ax2_kl.set_ylabel("KL Divergence", color="tab:red")
+        ax2_kl.tick_params(axis="y", labelcolor="tab:red")
 
-		lines, labels = ax2.get_legend_handles_labels()
-		lines2, labels2 = ax2_kl.get_legend_handles_labels()
-		ax2.legend(lines + lines2, labels + labels2, loc="upper right")
-	else:
-		ax2.legend()
+        lines, labels = ax2.get_legend_handles_labels()
+        lines2, labels2 = ax2_kl.get_legend_handles_labels()
+        ax2.legend(lines + lines2, labels + labels2, loc="upper right")
+    else:
+        ax2.legend()
 
-	ax2.set_title("Reconstruction (MSE) vs Regularization (KL)")
-	ax2.set_xlabel("Epochs")
-	ax2.set_ylabel("MSE Loss", color="tab:blue")
-	ax2.tick_params(axis="y", labelcolor="tab:blue")
+    ax2.set_title("Reconstruction (MSE) vs Regularization (KL)")
+    ax2.set_xlabel("Epochs")
+    ax2.set_ylabel("MSE Loss", color="tab:blue")
+    ax2.tick_params(axis="y", labelcolor="tab:blue")
 
-	# plot unscaled mse in physical space to see if model converges in metric of interest
-	unscaled_mse = model_losses["unscaled_valid_mses"]
-	ax3.plot(epochs, unscaled_mse, label="Valid MSE (unscaled)", color="tab:green")
-	best_epoch = int(np.argmin(unscaled_mse))
-	ax3.axvline(best_epoch, color="tab:green", linestyle="--", alpha=0.6,
-				label=f"Best epoch ({best_epoch})")
-	ax3.set_title("Unscaled MSE — Physical Space (Sweep Target)")
-	ax3.set_xlabel("Epochs")
-	ax3.set_ylabel("Unscaled MSE")
-	ax3.legend()
+    # plot unscaled mse in physical space to see if model converges in metric of interest
+    unscaled_mse = model_losses["unscaled_valid_mses"]
+    ax3.plot(epochs, unscaled_mse, label="Valid MSE (unscaled)", color="tab:green")
+    best_epoch = int(np.argmin(unscaled_mse))
+    ax3.axvline(best_epoch, color="tab:green", linestyle="--", alpha=0.6,
+                label=f"Best epoch ({best_epoch})")
+    ax3.set_title("Unscaled MSE — Physical Space (Sweep Target)")
+    ax3.set_xlabel("Epochs")
+    ax3.set_ylabel("Unscaled MSE")
+    ax3.legend()
 
-	plt.tight_layout()
+    plt.tight_layout()
 
-	if not test:
-		pth_fig = path.Path(test_name, f"{test_name}_loss.png")
-		pth_obj = path.Path(test_name, f"{test_name}_loss.pkl")
-		plt.savefig(pth_fig)
-		with open(pth_obj, "wb") as o:
-			pkl.dump(fig, o)
-		return fig
-	else:
-		plt.show()
+    if not test:
+        pth_fig = path.Path(test_name, f"{test_name}_loss.png")
+        pth_obj = path.Path(test_name, f"{test_name}_loss.pkl")
+        plt.savefig(pth_fig)
+        with open(pth_obj, "wb") as o:
+            pkl.dump(fig, o)
+        return fig
+    else:
+        plt.show()
 
 def plot_dists(train_outputs, valid_outputs, test_params, test=False):
 
-	test_name = test_params["test_name"]
+    test_name = test_params["test_name"]
 
-	# train_l_scaled = np.array([o["loss_scaled"] for o in train_outputs])
-	# valid_l_scaled = np.array([o["loss_scaled"] for o in valid_outputs])
+    # train_l_scaled = np.array([o["loss_scaled"] for o in train_outputs])
+    # valid_l_scaled = np.array([o["loss_scaled"] for o in valid_outputs])
 
-	# train_l_unscaled = np.array([o["loss_unscaled"] for o in train_outputs])
-	# valid_l_unscaled = np.array([o["loss_unscaled"] for o in valid_outputs])
+    # train_l_unscaled = np.array([o["loss_unscaled"] for o in train_outputs])
+    # valid_l_unscaled = np.array([o["loss_unscaled"] for o in valid_outputs])
 
-	# # train_l_rel = np.array([o["rel_loss"] for o in train_outputs])
-	# # valid_l_rel = np.array([o["rel_loss"] for o in valid_outputs])
+    # # train_l_rel = np.array([o["rel_loss"] for o in train_outputs])
+    # # valid_l_rel = np.array([o["rel_loss"] for o in valid_outputs])
 
-	# fig, axes = plt.subplots(1, 3, figsize=(24, 4))
+    # fig, axes = plt.subplots(1, 3, figsize=(24, 4))
 
-	train_l_scaled = train_outputs["loss_scaled"]
-	valid_l_scaled = valid_outputs["loss_scaled"]
+    train_l_scaled = train_outputs["loss_scaled"]
+    valid_l_scaled = valid_outputs["loss_scaled"]
 
-	train_l_unscaled = train_outputs["loss_unscaled"]
-	valid_l_unscaled = valid_outputs["loss_unscaled"]
+    train_l_unscaled = train_outputs["loss_unscaled"]
+    valid_l_unscaled = valid_outputs["loss_unscaled"]
 
-	fig, axes = plt.subplots(1, 2, figsize=(16, 4))
+    fig, axes = plt.subplots(1, 2, figsize=(16, 4))
 
-	_plot_dist(train_l_scaled, valid_l_scaled, axes[0], title="Loss Distribution (Scaled Space)")
-	_plot_dist(train_l_unscaled, valid_l_unscaled,axes[1], title="Loss Distribution (Unscaled Space)")
-	# _plot_dist(train_l_rel, valid_l_rel,axes[2], title="Loss Distribution (Relative)")
+    _plot_dist(train_l_scaled, valid_l_scaled, axes[0], title="Loss Distribution (Scaled Space)")
+    _plot_dist(train_l_unscaled, valid_l_unscaled,axes[1], title="Loss Distribution (Unscaled Space)")
+    # _plot_dist(train_l_rel, valid_l_rel,axes[2], title="Loss Distribution (Relative)")
 
-	plt.tight_layout()
+    plt.tight_layout()
 
-	if not test:
-		pth_fig = path.Path(test_name, f"{test_name}_dists.png")
-		pth_obj = path.Path(test_name, f"{test_name}_dists.pkl")
-		plt.savefig(pth_fig)
-		with open(pth_obj, "wb") as o:
-			pkl.dump(fig, o)
+    if not test:
+        pth_fig = path.Path(test_name, f"{test_name}_dists.png")
+        pth_obj = path.Path(test_name, f"{test_name}_dists.pkl")
+        plt.savefig(pth_fig)
+        with open(pth_obj, "wb") as o:
+            pkl.dump(fig, o)
 
-		return fig
-	else:
-		plt.show()
-	
+        return fig
+    else:
+        plt.show()
+    
 def _plot_dist(train_losses, valid_losses, ax, title="Loss Distribution"):
 
-	ax.hist(train_losses, bins=50, color='steelblue', edgecolor='white', label="Train")
-	ax.hist(valid_losses, bins=50, color='tomato', edgecolor='white', label="Valid")
+    ax.hist(train_losses, bins=50, color='steelblue', edgecolor='white', label="Train")
+    ax.hist(valid_losses, bins=50, color='tomato', edgecolor='white', label="Valid")
 
-	ax.set_xlabel('Reconstruction Loss (MSE)')
-	ax.set_ylabel('N')
-	ax.set_title(title)
+    ax.set_xlabel('Reconstruction Loss (MSE)')
+    ax.set_ylabel('N')
+    ax.set_title(title)
 
-	ax.legend()
+    ax.legend()
 
-	# plt.tight_layout()
+    # plt.tight_layout()
 
-	return ax
+    return ax
 
 def plot_examples(outputs, l, test_params, test=False):
-	"""
-	outputs: dict from funcs.get_predictions.
-	Uses outputs["examples"][space] — a list of 5 dicts with numpy arrays,
-	NOT the full 110k-spectrum dump (that was ~32 GB of Python floats).
-	"""
-	test_name = test_params["test_name"]
-	split = outputs["split"]
+    """
+    outputs: dict from funcs.get_predictions.
+    Uses outputs["examples"][space] — a list of 5 dicts with numpy arrays,
+    NOT the full 110k-spectrum dump (that was ~32 GB of Python floats).
+    """
+    test_name = test_params["test_name"]
+    split = outputs["split"]
 
-	figs = {}
-	for space in ("scaled", "unscaled"):
-		examples = outputs["examples"][space]
+    figs = {}
+    for space in ("scaled", "unscaled"):
+        examples = outputs["examples"][space]
 
-		fig, axes = plt.subplots(5, 2, figsize=(16, 20))
-		fig.suptitle(
-			f"{space.upper()} — latent: {test_params['latent_size']}, "
-			f"{test_params['activation_function']}, epochs: {test_params['max_epochs']}"
-		)
+        fig, axes = plt.subplots(5, 2, figsize=(16, 20))
+        fig.suptitle(
+            f"{space.upper()} — latent: {test_params['latent_size']}, "
+            f"{test_params['activation_function']}, epochs: {test_params['max_epochs']}"
+        )
 
-		for ax_row, ex in zip(axes, examples):
-			ax_fit, ax_res = ax_row
+        for ax_row, ex in zip(axes, examples):
+            ax_fit, ax_res = ax_row
 
-			og    = ex["og"].astype(float)       # already numpy — no np.array(list) conversion
-			recon = ex["recon"].astype(float)
-			mask  = ex["mask"].astype(bool)
+            og    = ex["og"].astype(float)       # already numpy — no np.array(list) conversion
+            recon = ex["recon"].astype(float)
+            mask  = ex["mask"].astype(bool)
 
-			og[~mask]    = np.nan                # gaps break the line, as before
-			recon[~mask] = np.nan
-			resid = og - recon
+            og[~mask]    = np.nan                # gaps break the line, as before
+            recon[~mask] = np.nan
+            resid = og - recon
 
-			ax_fit.step(l, og,    color="black", lw=1.5, alpha=0.7, where="mid", label="Original")
-			ax_fit.step(l, recon, color="red",   lw=1.0,            where="mid", label="Reconstructed")
-			ax_fit.set_title(f"{ex['label']},  loss: {ex['loss']:.5f}")
-			ax_fit.legend(fontsize=8)
-			ax_fit.set_ylabel("Flux")
+            ax_fit.step(l, og,    color="black", lw=1.5, alpha=0.7, where="mid", label="Original")
+            ax_fit.step(l, recon, color="red",   lw=1.0,            where="mid", label="Reconstructed")
+            ax_fit.set_title(f"{ex['label']},  loss: {ex['loss']:.5f}")
+            ax_fit.legend(fontsize=8)
+            ax_fit.set_ylabel("Flux")
 
-			ax_res.scatter(l, resid, color="gray", s=2)
-			ax_res.axhline(0, color="black", lw=0.8, ls=":")
-			ax_res.set_ylabel("Residual")
-			ax_res.set_xlabel("Wavelength")
+            ax_res.scatter(l, resid, color="gray", s=2)
+            ax_res.axhline(0, color="black", lw=0.8, ls=":")
+            ax_res.set_ylabel("Residual")
+            ax_res.set_xlabel("Wavelength")
 
-		plt.tight_layout()
-		figs[space] = fig
+        plt.tight_layout()
+        figs[space] = fig
 
-		if not test:
-			fig.savefig(path.Path(test_name, f"{test_name}_{split}_recon_{space}.png"))
-			with open(path.Path(test_name, f"{test_name}_{split}_recon_{space}.pkl"), "wb") as o:
-				pkl.dump(fig, o)
-		else:
-			plt.show()
+        if not test:
+            fig.savefig(path.Path(test_name, f"{test_name}_{split}_recon_{space}.png"))
+            with open(path.Path(test_name, f"{test_name}_{split}_recon_{space}.pkl"), "wb") as o:
+                pkl.dump(fig, o)
+        else:
+            plt.show()
 
-	return figs["scaled"], figs["unscaled"]
+    return figs["scaled"], figs["unscaled"]
 
 def plot_log_vs_unscaled_mse(model_losses, test_params, test=False):
 
-	test_name  = test_params["test_name"]
-	# epochs     = range(1, len(model_losses["valid_mse"]) + 1)
-	epochs     = range(0, len(model_losses["valid_mse"]))
-	log_mse    = model_losses["valid_mse"]
-	unscaled_mse = model_losses["unscaled_valid_mses"]
+    test_name  = test_params["test_name"]
+    # epochs     = range(1, len(model_losses["valid_mse"]) + 1)
+    epochs     = range(0, len(model_losses["valid_mse"]))
+    log_mse    = model_losses["valid_mse"]
+    unscaled_mse = model_losses["unscaled_valid_mses"]
 
-	fig, ax1 = plt.subplots(figsize=(10, 4))
-	c_log, c_unscaled = "tab:orange", "tab:green"
+    fig, ax1 = plt.subplots(figsize=(10, 4))
+    c_log, c_unscaled = "tab:orange", "tab:green"
 
-	ax1.plot(epochs, log_mse, color=c_log, label="Scaled MSE")
-	ax1.set_xlabel("Epoch")
-	ax1.set_ylabel("Scaled MSE", color=c_log)
-	ax1.tick_params(axis="y", labelcolor=c_log)
+    ax1.plot(epochs, log_mse, color=c_log, label="Scaled MSE")
+    ax1.set_xlabel("Epoch")
+    ax1.set_ylabel("Scaled MSE", color=c_log)
+    ax1.tick_params(axis="y", labelcolor=c_log)
 
-	ax2 = ax1.twinx()
-	ax2.plot(epochs, unscaled_mse, color=c_unscaled, label="MSE (unscaled)")
-	ax2.set_ylabel("MSE (unscaled)", color=c_unscaled)
-	ax2.tick_params(axis="y", labelcolor=c_unscaled)
+    ax2 = ax1.twinx()
+    ax2.plot(epochs, unscaled_mse, color=c_unscaled, label="MSE (unscaled)")
+    ax2.set_ylabel("MSE (unscaled)", color=c_unscaled)
+    ax2.tick_params(axis="y", labelcolor=c_unscaled)
 
-	best_log = int(np.argmin(log_mse))
-	best_unscaled = int(np.argmin(unscaled_mse))
-	ax1.axvline(best_log, color=c_log, linestyle="--", alpha=0.5, label=f"Best scaled (ep {best_log})")
-	ax2.axvline(best_unscaled, color=c_unscaled, linestyle="--", alpha=0.5, label=f"Best unscaled (ep {best_unscaled})")
+    best_log = int(np.argmin(log_mse))
+    best_unscaled = int(np.argmin(unscaled_mse))
+    ax1.axvline(best_log, color=c_log, linestyle="--", alpha=0.5, label=f"Best scaled (ep {best_log})")
+    ax2.axvline(best_unscaled, color=c_unscaled, linestyle="--", alpha=0.5, label=f"Best unscaled (ep {best_unscaled})")
 
-	lines1, labels1 = ax1.get_legend_handles_labels()
-	lines2, labels2 = ax2.get_legend_handles_labels()
-	ax1.legend(lines1 + lines2, labels1 + labels2, fontsize=8)
-	plt.title("Scaled MSE vs Physical Unscaled MSE per Epoch")
-	plt.tight_layout()
+    lines1, labels1 = ax1.get_legend_handles_labels()
+    lines2, labels2 = ax2.get_legend_handles_labels()
+    ax1.legend(lines1 + lines2, labels1 + labels2, fontsize=8)
+    plt.title("Scaled MSE vs Physical Unscaled MSE per Epoch")
+    plt.tight_layout()
 
-	if not test:
-		pth_fig = path.Path(test_name, f"{test_name}_log_vs_unscaled_mse.png")
-		fig.savefig(pth_fig)
-		wandb.log({"metrics/log_vs_unscaled_mse": wandb.Image(fig)})
-		plt.close(fig)
-	else:
-		plt.show()
+    if not test:
+        pth_fig = path.Path(test_name, f"{test_name}_log_vs_unscaled_mse.png")
+        fig.savefig(pth_fig)
+        wandb.log({"metrics/log_vs_unscaled_mse": wandb.Image(fig)})
+        plt.close(fig)
+    else:
+        plt.show()
 
-	return fig
+    return fig
 
 def embed_latent(latent, method="tsne", n_max=15000, pca_dims=50, seed=42):
-	"""
-	Fit ONE 2D embedding of the latent space.
+    """
+    Fit ONE 2D embedding of the latent space.
 
-	Returns (emb, idx):
-	  emb : (n, 2) coordinates
-	  idx : indices of the rows that were embedded. Callers MUST index their
-			colour arrays with idx, or point i gets spectrum j's colour.
-	"""
-	latent = np.asarray(latent, dtype=np.float64)
+    Returns (emb, idx):
+      emb : (n, 2) coordinates
+      idx : indices of the rows that were embedded. Callers MUST index their
+            colour arrays with idx, or point i gets spectrum j's colour.
+    """
+    latent = np.asarray(latent, dtype=np.float64)
 
-	if method == "umap" and not _UMAP_AVAILABLE:
-		raise ImportError("umap-learn not installed: pip install umap-learn")
+    if method == "umap" and not _UMAP_AVAILABLE:
+        raise ImportError("umap-learn not installed: pip install umap-learn")
 
-	# subsample: Barnes-Hut t-SNE on ~90k points takes hours and plots as an ink blot
-	rng = np.random.default_rng(seed)
-	n = len(latent)
-	idx = np.sort(rng.choice(n, size=n_max, replace=False)) if n > n_max else np.arange(n)
-	z = latent[idx]
+    # subsample: Barnes-Hut t-SNE on ~90k points takes hours and plots as an ink blot
+    rng = np.random.default_rng(seed)
+    n = len(latent)
+    idx = np.sort(rng.choice(n, size=n_max, replace=False)) if n > n_max else np.arange(n)
+    z = latent[idx]
 
-	# z-score each latent dim. t-SNE/UMAP consume EUCLIDEAN distance, so without this
-	# the highest-variance dim dominates the geometry for reasons of scale, not structure.
-	z = (z - z.mean(axis=0)) / (z.std(axis=0) + 1e-8)
+    # z-score each latent dim. t-SNE/UMAP consume EUCLIDEAN distance, so without this
+    # the highest-variance dim dominates the geometry for reasons of scale, not structure.
+    z = (z - z.mean(axis=0)) / (z.std(axis=0) + 1e-8)
 
-	# PCA first: denoises and cuts the neighbour search cost a lot. Standard practice.
-	if z.shape[1] > pca_dims:
-		z = PCA(n_components=pca_dims, random_state=seed).fit_transform(z)
+    # PCA first: denoises and cuts the neighbour search cost a lot. Standard practice.
+    if z.shape[1] > pca_dims:
+        z = PCA(n_components=pca_dims, random_state=seed).fit_transform(z)
 
-	if method == "tsne":
-		emb = TSNE(
-			n_components=2,
-			perplexity=min(30, max(5, len(z) - 1)),
-			init="pca",              # global structure is meaningful; random init destroys it
-			learning_rate="auto",
-			random_state=seed,       # without this your plots are irreproducible run-to-run
-		).fit_transform(z)
-	elif method == "umap":
-		emb = umap.UMAP(
-			n_components=2, n_neighbors=30, min_dist=0.1, random_state=seed,
-		).fit_transform(z)
-	else:
-		raise ValueError(f"method must be 'tsne' or 'umap', got {method!r}")
+    if method == "tsne":
+        emb = TSNE(
+            n_components=2,
+            perplexity=min(30, max(5, len(z) - 1)),
+            init="pca",              # global structure is meaningful; random init destroys it
+            learning_rate="auto",
+            random_state=seed,       # without this your plots are irreproducible run-to-run
+        ).fit_transform(z)
+    elif method == "umap":
+        emb = umap.UMAP(
+            n_components=2, n_neighbors=30, min_dist=0.1, random_state=seed,
+        ).fit_transform(z)
+    else:
+        raise ValueError(f"method must be 'tsne' or 'umap', got {method!r}")
 
-	return emb, idx
+    return emb, idx
 
 
 def plot_latent_panels(latent_data, color_params, method, test_params, test=False):
-	"""
-	ONE embedding, N colour panels — all panels share the SAME coordinates,
-	so a point in the top-left of one panel is the same spectrum in all of them.
+    """
+    ONE embedding, N colour panels — all panels share the SAME coordinates,
+    so a point in the top-left of one panel is the same spectrum in all of them.
 
-	(The old plot_latent_space refit t-SNE per colour, giving a different layout
-	each time. Panels could not be cross-referenced.)
-	"""
-	emb, idx = embed_latent(latent_data["latent"], method=method)
+    (The old plot_latent_space refit t-SNE per colour, giving a different layout
+    each time. Panels could not be cross-referenced.)
+    """
+    emb, idx = embed_latent(latent_data["latent"], method=method)
 
-	keys = [(k, lbl) for k, lbl in color_params if latent_data.get(k) is not None]
-	if not keys:
-		raise ValueError(f"no usable colour keys. available: {list(latent_data)}")
+    keys = [(k, lbl) for k, lbl in color_params if latent_data.get(k) is not None]
+    if not keys:
+        raise ValueError(f"no usable colour keys. available: {list(latent_data)}")
 
-	plt.style.use("fivethirtyeight")
-	fig, axes = plt.subplots(1, len(keys), figsize=(7 * len(keys), 6), squeeze=False)
+    plt.style.use("fivethirtyeight")
+    fig, axes = plt.subplots(1, len(keys), figsize=(7 * len(keys), 6), squeeze=False)
 
-	for ax, (k, lbl) in zip(axes[0], keys):
-		c = np.asarray(latent_data[k], dtype=float)[idx]     # <-- align to the subsample
+    for ax, (k, lbl) in zip(axes[0], keys):
+        c = np.asarray(latent_data[k], dtype=float)[idx]     # <-- align to the subsample
 
-		# percentile clip: a single outlier otherwise flattens the whole colourmap
-		# to one shade, hiding exactly the structure you're looking for.
-		vmin, vmax = np.nanpercentile(c, [2, 98])
+        # percentile clip: a single outlier otherwise flattens the whole colourmap
+        # to one shade, hiding exactly the structure you're looking for.
+        vmin, vmax = np.nanpercentile(c, [2, 98])
 
-		sc = ax.scatter(emb[:, 0], emb[:, 1], c=c, cmap="viridis", s=4,
-						alpha=0.6, vmin=vmin, vmax=vmax, rasterized=True)
-		plt.colorbar(sc, ax=ax, label=lbl)
-		ax.set_title(lbl)
-		ax.set_xlabel(f"{method} 1")
-		ax.set_ylabel(f"{method} 2")
+        sc = ax.scatter(emb[:, 0], emb[:, 1], c=c, cmap="viridis", s=4,
+                        alpha=0.6, vmin=vmin, vmax=vmax, rasterized=True)
+        plt.colorbar(sc, ax=ax, label=lbl)
+        ax.set_title(lbl)
+        ax.set_xlabel(f"{method} 1")
+        ax.set_ylabel(f"{method} 2")
 
-	fig.suptitle(f"Latent space — {method.upper()} (n={len(idx)} of {len(latent_data['latent'])})")
-	plt.tight_layout()
+    fig.suptitle(f"Latent space — {method.upper()} (n={len(idx)} of {len(latent_data['latent'])})")
+    plt.tight_layout()
 
-	if test:
-		plt.show()
-		return fig
+    if test:
+        plt.show()
+        return fig
 
-	test_name = test_params["test_name"]
-	stem = f"{test_name}_{latent_data['split']}_latent_{method}"
-	fig.savefig(path.Path(test_name, f"{stem}.png"), dpi=150)
-	with open(path.Path(test_name, f"{stem}.pkl"), "wb") as o:
-		pkl.dump(fig, o)
+    test_name = test_params["test_name"]
+    stem = f"{test_name}_{latent_data['split']}_latent_{method}"
+    fig.savefig(path.Path(test_name, f"{stem}.png"), dpi=150)
+    with open(path.Path(test_name, f"{stem}.pkl"), "wb") as o:
+        pkl.dump(fig, o)
 
-	return fig
+    return fig
 
+"""AGN-vs-normal-galaxy comparison for the anomaly detector.
+ 
+The anomaly score is the per-spectrum reconstruction loss. Plots the loss
+distributions of the normal-galaxy and AGN validation sets, and computes a
+few simple separation statistics for W&B.
+"""
+import numpy as np
+import matplotlib.pyplot as plt
+ 
+SPACES = {
+    "scaled":   "Reconstruction MSE (log-scaled, standardised)",
+    "unscaled": "Reconstruction MSE (physical / normalised flux)",
+}
+ 
+ 
+def _finite(x):
+    x = np.asarray(x, float)
+    return x[np.isfinite(x)]
+ 
+ 
+def agn_detection_metrics(normal_losses, agn_losses, fprs=(0.01, 0.05, 0.10)):
+    """Simple separation statistics, using loss as the anomaly score.
+ 
+    median_normal / median_agn : median loss of each set.
+    median_ratio               : median AGN loss / median normal loss.
+    tpr_at_fprX                : fraction of AGN above the loss threshold that
+                                 flags X% of normal galaxies.
+    """
+    normal, agn = _finite(normal_losses), _finite(agn_losses)
+    out = {
+        "median_normal": float(np.median(normal)),
+        "median_agn":    float(np.median(agn)),
+        "median_ratio":  float(np.median(agn) / max(np.median(normal), 1e-12)),
+    }
+    for f in fprs:
+        threshold = np.quantile(normal, 1 - f)
+        out[f"tpr_at_fpr{int(round(f * 100))}"] = float(np.mean(agn > threshold))
+    return out
+ 
+ 
+def all_agn_metrics(normal_ev, agn_ev, prefix="agn"):
+    """Metrics for both loss spaces, flattened with W&B-style keys."""
+    stats = {}
+    for space in SPACES:
+        m = agn_detection_metrics(normal_ev[f"loss_{space}"], agn_ev[f"loss_{space}"])
+        stats.update({f"{prefix}/{space}_{k}": v for k, v in m.items()})
+    return stats
+ 
+ 
+def plot_agn_vs_normal(normal_ev, agn_ev, title="", n_bins=60, log_x=True):
+    """Two panels of counts: scaled loss (left) and unscaled loss (right),
+    normal galaxies and AGN overlaid on shared bins.
+ 
+    log_x: log-spaced bins and log x-axis. Losses are heavily right-skewed, so
+    on a linear axis most spectra sit in the first couple of bins.
+    """
+    fig, axes = plt.subplots(1, 2, figsize=(13, 5))
+    for ax, (space, xlabel) in zip(axes, SPACES.items()):
+        normal = _finite(normal_ev[f"loss_{space}"])
+        agn = _finite(agn_ev[f"loss_{space}"])
+        both = np.concatenate([normal, agn])
+ 
+        if log_x:
+            pos = both[both > 0]
+            bins = np.logspace(np.log10(pos.min()), np.log10(pos.max()), n_bins + 1)
+            ax.set_xscale("log")
+        else:
+            bins = np.linspace(both.min(), both.max(), n_bins + 1)
+ 
+        ax.hist(normal, bins=bins, alpha=0.6, color="royalblue",
+                label=f"Normal galaxies (N={len(normal)})")
+        ax.hist(agn, bins=bins, alpha=0.6, color="crimson",
+                label=f"AGN (N={len(agn)})")
+        ax.set_xlabel(xlabel)
+        ax.set_ylabel("N")
+        ax.legend()
+        ax.grid(alpha=0.3)
+ 
+    if title:
+        fig.suptitle(title, fontsize=9)
+    fig.tight_layout()
+    return fig
 
 # def plot_latent_space(latent_data, color_by, color_label=None,
 # 					  method="tsne", test_params=None, test=False):
