@@ -1,57 +1,55 @@
-"""List everything in an HDF5 file: groups, datasets (shape, dtype), attributes.
+"""Work out which transform + normaliser produced log_scale_flux and log_scale_flux_med.
+
+Recomputes each stored dataset from raw_flux using every combination of
+candidate transform and per-spectrum normaliser, and reports how closely each
+matches. The combination with near-zero error is the forward transform, which
+tells you exactly what the inversion in funcs.py needs to undo.
 
 Usage:
-    uv run python inspect_h5.py all_spectra_float32_v3.h5
-    uv run python inspect_h5.py all_spectra_float32_v3.h5 --stats   # adds quick stats per dataset
+    uv run python check_log_transform.py all_spectra_float32_v3.h5
 """
-import argparse
+import sys
 
 import h5py
 import numpy as np
 
+N_ROWS = 200  # a sample is enough to identify the transform
 
-def show_attrs(obj, indent):
-    for key, val in obj.attrs.items():
-        print(f"{indent}  @{key} = {val!r}")
-
-
-def quick_stats(ds, n_rows=1000):
-    """Stats on the first n_rows only, so large datasets aren't loaded into memory."""
-    if ds.dtype.kind not in "fiu" or ds.size == 0:
-        return ""
-    sample = ds[:n_rows] if ds.ndim > 0 else ds[()]
-    sample = np.asarray(sample, dtype=np.float64)
-    nan_frac = np.isnan(sample).mean()
-    return (f"  [first {min(n_rows, len(ds)) if ds.ndim else 1} rows: "
-            f"min={np.nanmin(sample):.4g} max={np.nanmax(sample):.4g} "
-            f"mean={np.nanmean(sample):.4g} NaN={nan_frac:.1%}]")
+TRANSFORMS = {
+    "log1p(x)": np.log1p,
+    "sign(x)*log1p(|x|)": lambda x: np.sign(x) * np.log1p(np.abs(x)),
+    "arcsinh(x)": np.arcsinh,
+    "log10(x)": np.log10,
+    "log(x)": np.log,
+}
+NORMS = ["NORM_CMN", "NORM_CMD", "NORM_MED"]
+TARGETS = ["log_scale_flux", "log_scale_flux_med"]
 
 
-def main():
-    parser = argparse.ArgumentParser()
-    parser.add_argument("path")
-    parser.add_argument("--stats", action="store_true", help="print quick stats per dataset")
-    args = parser.parse_args()
+def main(path):
+    with h5py.File(path, "r") as hf:
+        g = hf["train"]
+        raw = g["raw_flux"][:N_ROWS].astype(np.float64)
+        norms = {n: g[n][:N_ROWS].astype(np.float64)[:, None] for n in NORMS}
 
-    with h5py.File(args.path, "r") as hf:
-        print(f"{args.path}")
-        show_attrs(hf, "")
-
-        def visit(name, obj):
-            depth = name.count("/")
-            indent = "  " * (depth + 1)
-            label = name.split("/")[-1]
-            if isinstance(obj, h5py.Group):
-                print(f"{indent}{label}/  (group, {len(obj)} items)")
-            else:
-                line = f"{indent}{label}  shape={obj.shape} dtype={obj.dtype}"
-                if args.stats:
-                    line += quick_stats(obj)
-                print(line)
-            show_attrs(obj, indent)
-
-        hf.visititems(visit)
+        for target in TARGETS:
+            stored = g[target][:N_ROWS].astype(np.float64)
+            print(f"\n{target}:")
+            results = []
+            with np.errstate(all="ignore"):
+                for norm_name, norm in norms.items():
+                    for t_name, fn in TRANSFORMS.items():
+                        recomputed = fn(raw / norm)
+                        ok = np.isfinite(stored) & np.isfinite(recomputed)
+                        if ok.sum() == 0:
+                            continue
+                        coverage = ok.sum() / np.isfinite(stored).sum()
+                        err = np.abs(recomputed[ok] - stored[ok]).max()
+                        results.append((err, coverage, t_name, norm_name))
+            for err, coverage, t_name, norm_name in sorted(results)[:5]:
+                print(f"  {t_name:<22} raw_flux/{norm_name:<9} "
+                      f"max abs diff={err:.3g}  coverage={coverage:.1%}")
 
 
 if __name__ == "__main__":
-    main()
+    main(sys.argv[1])

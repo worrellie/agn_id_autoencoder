@@ -474,40 +474,40 @@ def main():
 	agn_scaled = agn_ev["loss_scaled"]
 	agn_unscaled = agn_ev["loss_unscaled"]
 
-	def to_numpy(arr):
-		if hasattr(arr, "detach"):
-			return arr.detach().cpu().numpy()
-		return np.asarray(arr)
+	# def to_numpy(arr):
+	# 	if hasattr(arr, "detach"):
+	# 		return arr.detach().cpu().numpy()
+	# 	return np.asarray(arr)
 
-	norm_scaled = to_numpy(normal_scaled)
-	norm_unscaled = to_numpy(normal_unscaled)
-	a_scaled = to_numpy(agn_scaled)
-	a_unscaled = to_numpy(agn_unscaled)
+	# norm_scaled = to_numpy(normal_scaled)
+	# norm_unscaled = to_numpy(normal_unscaled)
+	# a_scaled = to_numpy(agn_scaled)
+	# a_unscaled = to_numpy(agn_unscaled)
 
-	# Create a 2-row subplot figure
-	fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=False)
+	# # Create a 2-row subplot figure
+	# fig, (ax1, ax2) = plt.subplots(2, 1, figsize=(10, 8), sharex=False)
 
-	# --- 1. Scaled Loss Histogram ---
-	ax1.hist(norm_scaled, bins=50, alpha=0.6, label='Normal Galaxies', density=True, color='royalblue', edgecolor='none')
-	ax1.hist(a_scaled, bins=50, alpha=0.6, label='AGNs (Anomalies)', density=True, color='crimson', edgecolor='none')
-	ax1.set_title('Reconstruction Loss Distribution - Scaled')
-	ax1.set_xlabel('Scaled Loss')
-	ax1.set_ylabel('Density')
-	ax1.legend(loc='upper right')
-	ax1.grid(alpha=0.3)
+	# # --- 1. Scaled Loss Histogram ---
+	# ax1.hist(norm_scaled, bins=50, alpha=0.6, label='Normal Galaxies', density=True, color='royalblue', edgecolor='none')
+	# ax1.hist(a_scaled, bins=50, alpha=0.6, label='AGNs (Anomalies)', density=True, color='crimson', edgecolor='none')
+	# ax1.set_title('Reconstruction Loss Distribution - Scaled')
+	# ax1.set_xlabel('Scaled Loss')
+	# ax1.set_ylabel('Density')
+	# ax1.legend(loc='upper right')
+	# ax1.grid(alpha=0.3)
 
-	# --- 2. Unscaled Loss Histogram ---
-	ax2.hist(norm_unscaled, bins=50, alpha=0.6, label='Normal Galaxies', density=True, color='royalblue', edgecolor='none')
-	ax2.hist(a_unscaled, bins=50, alpha=0.6, label='AGNs (Anomalies)', density=True, color='crimson', edgecolor='none')
-	ax2.set_title('Reconstruction Loss Distribution - Unscaled')
-	ax2.set_xlabel('Unscaled Loss')
-	ax2.set_ylabel('Density')
-	ax2.legend(loc='upper right')
-	ax2.grid(alpha=0.3)
+	# # --- 2. Unscaled Loss Histogram ---
+	# ax2.hist(norm_unscaled, bins=50, alpha=0.6, label='Normal Galaxies', density=True, color='royalblue', edgecolor='none')
+	# ax2.hist(a_unscaled, bins=50, alpha=0.6, label='AGNs (Anomalies)', density=True, color='crimson', edgecolor='none')
+	# ax2.set_title('Reconstruction Loss Distribution - Unscaled')
+	# ax2.set_xlabel('Unscaled Loss')
+	# ax2.set_ylabel('Density')
+	# ax2.legend(loc='upper right')
+	# ax2.grid(alpha=0.3)
 
-	plt.tight_layout()
-	plt.savefig("agn_vs_normal_loss_hists.pdf")
-	# plt.show()
+	# plt.tight_layout()
+	# plt.savefig("agn_vs_normal_loss_hists.pdf")
+	# # plt.show()
 
 
 	wandb.finish()
