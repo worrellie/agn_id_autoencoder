@@ -64,7 +64,7 @@ def main():
 	)
 
 	parser.add_argument("-f", "--filename", default="all_spectra_float32_v2.h5") # also all_spectra_float32_med.h5 (same but with median norm flux)
-	parser.add_argument("-a", "--agn_file", default="all_agn_float32.h5")
+	parser.add_argument("-a", "--agn_file", default="all_agn_z09_17.h5")
 	parser.add_argument("-p", "--project_name", default="unspecified_project")
 	parser.add_argument("-ft", "--flux_type", default="log_scale_flux") # also log_scale_flux_med
 
