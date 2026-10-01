@@ -16,7 +16,7 @@ command:
   - python
   - ${program}
   - -f
-  - all_spectra_float32_v3.h5
+  - all_spectra_float32_v4.h5
   - -ft
   - log_scale_flux        # mean normalisation (median is log_scale_flux_med)
   - -p
