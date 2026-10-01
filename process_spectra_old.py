@@ -2,6 +2,7 @@ RND = 42
 
 # from joblib import Parallel, delayed
 from functools import partial
+from functools import partial
 import multiprocessing
 import json
 import glob
@@ -93,63 +94,6 @@ def check_common_region_exists(json_path):
     else:
         # print(f"common region file {json_path} already exists, skipping creation.")
         return True
-
-def parse_redshift(stem):
-    """Redshift from a filename stem like '..._z1.2546_...'.
-    Returns (z, None) on success, (NaN, reason) on failure — never a default value."""
-    try:
-        z = float(stem.split("_z")[1].split("_")[0])
-    except (IndexError, ValueError) as e:
-        return np.nan, f"redshift unparseable from filename ({type(e).__name__})"
-    if not np.isfinite(z) or z < 0:
-        return np.nan, f"invalid redshift value in filename ({z})"
-    return z, None
-
-
-def quality_flags(final_spec_flux, noise_info, full_spec_median):
-    """Problems with a spectrum that was processed and saved.
-    The two 'continuum' conditions match exactly what save_h5.py removes (<= 0 or NaN)."""
-    flags = []
-    if (final_spec_flux == 0).all():
-        flags.append("fully masked in common window")
-    if noise_info.get("n_cont_pix", 2) < 2:
-        flags.append("continuum window < 2 pixels (outside coverage)")
-    elif noise_info.get("cont_coverage", 1.0) < 0.5:
-        flags.append(f"continuum window only {noise_info['cont_coverage']:.0%} covered "
-                     "(SNR/normalisation from partial window)")
-    if not noise_info["noise"] > 0:
-        flags.append("zero noise in continuum window")
-    if not noise_info["continuum_mean"] > 0:
-        flags.append("continuum mean <= 0 or NaN (dropped by save_h5)")
-    if not noise_info["continuum_median"] > 0:
-        flags.append("continuum median <= 0 or NaN (dropped by save_h5)")
-    if not full_spec_median > 0:
-        flags.append("full-spectrum median <= 0 or NaN")
-    return flags
-
-
-def write_logs(log, prefix):
-    """Write the full processing log plus filtered lists:
-    skipped (not processed), redshift NaN, and flagged (saved, but with problems)."""
-    import csv
-    from collections import Counter
-
-    def write(rows, path):
-        with open(path, "w", newline="") as f:
-            w = csv.DictWriter(f, fieldnames=["name", "status", "reason", "z"])
-            w.writeheader()
-            w.writerows(rows)
-        print(f"wrote {len(rows)} rows to {path}")
-
-    write(log, f"{prefix}_processing_log.csv")
-    write([r for r in log if r["status"] in ("skipped", "failed")], f"{prefix}_skipped.csv")
-    write([r for r in log if "redshift" in r["reason"]], f"{prefix}_redshift_nan.csv")
-    write([r for r in log if r["status"] == "flagged"], f"{prefix}_flagged.csv")
-
-    print("status:", dict(Counter(r["status"] for r in log)))
-    reasons = Counter(x for r in log for x in r["reason"].split("; ") if x)
-    for reason, n in reasons.most_common():
-        print(f"  {n:6d}  {reason}")
     
 def get_all_base_paths(spec_dir):
 
@@ -175,8 +119,7 @@ def get_all_base_paths(spec_dir):
 
     return base_paths
 
-def get_valid_triplets(spec_dir, log):
-    # `log` is a list created in main(); skipped galaxies are appended to it
+def get_valid_triplets(spec_dir):
     # improvement on deprecated_2 because it lists each directory only once.
     # previously, it would glob (list the full dir) for each band for every spec
     # would (did) take aaaaages.
@@ -195,59 +138,79 @@ def get_valid_triplets(spec_dir, log):
                 continue
             buckets.setdefault(base, {})[band] = os.path.join(zpath, s)
         for base in sorted(buckets):          # sorted -> reproducible order
-            # log galaxies that don't have all 3 bands, and skip them
             bands = buckets[base]
-            missing = [b for b in ("RI", "YJ", "H") if b not in bands]
-            if missing:
-                log.append({"name": f"{z_dir}/{base}", "status": "skipped",
-                            "reason": f"missing band(s): {','.join(missing)}", "z": np.nan})
+            if not all(b in bands for b in ("RI", "YJ", "H")):
+                print(f"missing band for {base}, skipping", file=sys.stderr)
                 continue
             triplet = [bands["RI"], bands["YJ"], bands["H"]]
-            stem = os.path.basename(triplet[0]).rsplit("_", 1)[0]   # drop '_RI.fits'
-            z, why = parse_redshift(stem)
-            if why:
-                log.append({"name": stem, "status": "skipped", "reason": why, "z": np.nan})
-                continue
-            yield triplet, z
+            z = os.path.basename(triplet[0]).split("_z")[1].split("_")[0]
+            yield triplet, float(z)
 
-def get_valid_agn_triplets(agn_dir, log):
-    """Yield (triplet, z) for each complete AGN. Incomplete or unreadable ones are
-    recorded in `log` (a list created in main) instead of being printed or defaulted."""
+def get_valid_agn_triplets(agn_dir):
+
+    # if no agn file, end func
     if not os.path.exists(agn_dir):
         return
 
-    # AGN layout: agn_dir/<exposure-time folder>/AGN_temp_z..._2h_<band>.fits
+    # agn have different stucture- look in spece folder then in each exposure
+    # time folder
     for exp_dir in sorted(os.listdir(agn_dir)):
         exp_path = os.path.join(agn_dir, exp_dir)
         if not os.path.isdir(exp_path):
             continue
 
-        buckets = {}                                  # base -> {"RI": path, ...}
+        buckets = {}
         for s in os.listdir(exp_path):
             if not s.startswith("AGN_temp_"):
+                # skip files that are not AGN spectra
                 continue
-            # e.g. AGN_temp_z0.9_ebv0.2_L300044.0_emline0.5_fragal0.0_2h_YJ.fits
-            parts = s.rsplit("_", 1)                  # split off '<band>.fits'
+
+        # Example filename: AGN_temp_z0.9_ebv0.2_L300044.0_emline0.5_fragal0.0_2h_YJ.fits
+            # Split off the file extension and the band (RI, YJ, H)
+            parts = s.rsplit("_", 1)
             if len(parts) < 2:
                 continue
             band = parts[1].replace(".fits", "")
             if band not in ("RI", "YJ", "H"):
                 continue
-            buckets.setdefault(parts[0], {})[band] = os.path.join(exp_path, s)
+            
+            # The base name is everything before the band identifier
+            base = parts[0]
+            buckets.setdefault(base, {})[band] = os.path.join(exp_path, s)
+
+            # base = s.split("_z")[0]
+            # band = s.rsplit("_", 1)[1].replace(".fits", "")
+            # if band not in ("RI", "YJ", "H"):
+            #     continue
+            # buckets.setdefault(base, {})[band] = os.path.join(exp_path, s)
+
 
         for base in sorted(buckets):
             bands = buckets[base]
-            missing = [b for b in ("RI", "YJ", "H") if b not in bands]
-            if missing:
-                log.append({"name": f"{exp_dir}/{base}", "status": "skipped",
-                            "reason": f"missing band(s): {','.join(missing)}", "z": np.nan})
+            if not all(b in bands for b in ("RI", "YJ", "H")):
+                print(f"Missing band for AGN base: {base}", file=sys.stderr)
                 continue
-            z, why = parse_redshift(base)             # AGN base name contains '_z...'
-            if why:
-                log.append({"name": f"{exp_dir}/{base}", "status": "skipped",
-                            "reason": why, "z": np.nan})
-                continue
-            yield [bands["RI"], bands["YJ"], bands["H"]], z
+            triplet = [bands["RI"], bands["YJ"], bands["H"]]
+            
+            # Parse redshift from the filename (e.g., _z0.9_)
+            print(base)
+            try:
+                z_str = base.split("_z")[1].split("_")[0]
+                z = float(z_str)
+            except Exception:
+                z = 0.9  # Fallback default matching your target redshift
+                
+            yield triplet, z
+        
+        # for base in sorted(buckets):
+        #     bands = buckets[base]
+        #     if not all(b in bands for b in ("RI", "YJ", "H")):
+        #         print(f"missing band for {base}, skipping", file=sys.stderr)
+        #         continue
+        #     triplet = [bands["RI"], bands["YJ"], bands["H"]]
+        #     z = os.path.basename(triplet[0]).split("_z")[1].split("_")[0]
+        #     # print(f"yielding AGN triplet for {base} with z={z}")
+        #     yield triplet, float(z)
 
 def get_valid_triplets_deprecated_2(spec_dir):
 
@@ -444,14 +407,9 @@ def calc_SNR(flux, l):
         print("could not get snr: continuum region too small")
         return {'mean_flux': 0.0, 'median_flux': 0.0,
                 'continuum_mean': 0.0, 'continuum_median': 0.0,
-                'noise': 0.0, 'snr_mean': 0.0, 'snr_median': 0.0,
-                'n_cont_pix': int(continuum_region_flux.size)}
+                'noise': 0.0, 'snr_mean': 0.0, 'snr_median': 0.0}
 
     noise = np.std(continuum_region_flux)
-
-    # fraction of the 700 A window actually covered by data (pixels x typical pixel width)
-    l_cont = l[continuum_region_mask]
-    cont_coverage = float(continuum_region_flux.size * np.median(np.diff(np.sort(l_cont))) / 700.0)
     mean_flux = np.mean(full_spectrum_flux)
     median_flux = np.median(full_spectrum_flux)
 
@@ -462,12 +420,10 @@ def calc_SNR(flux, l):
         print("could not get snr, zero noise")
         return {'mean_flux': mean_flux, 'median_flux': median_flux,
                 'continuum_mean': continuum_mean, 'continuum_median': continuum_median,
-                'noise': 0.0, 'snr_mean': 0.0, 'snr_median': 0.0,
-                'n_cont_pix': int(continuum_region_flux.size)}
+                'noise': 0.0, 'snr_mean': 0.0, 'snr_median': 0.0}
 
-    # continuum SNR: signal and noise both from the rest-frame 5100-5800 A window
-    snr_mean = continuum_mean / noise
-    snr_median = continuum_median / noise
+    snr_mean = mean_flux / noise
+    snr_median = median_flux / noise
 
 
     noise_info = {
@@ -478,8 +434,6 @@ def calc_SNR(flux, l):
         'noise' : noise,
         'snr_mean' : snr_mean,
         'snr_median' : snr_median,
-        'n_cont_pix' : int(continuum_region_flux.size),
-        'cont_coverage' : cont_coverage,
     }
 
     return noise_info
@@ -508,9 +462,9 @@ def save_spec( flux, l, original_z, snr_and_noise, norm_factors, ref_cat_row, in
     hdr = fits.Header()
     hdr["OG_Z"] = str(original_z)
 
-    hdr["SNR_MEAN"] = (str(snr_and_noise['snr_mean']), "cont. mean/std, rest 5100-5800A")
-    hdr["SNR_MED"] = (str(snr_and_noise['snr_median']), "cont. median/std, rest 5100-5800A")
-    hdr["NOISE"] = (str(snr_and_noise['noise']), "std of flux, rest 5100-5800A")
+    hdr["SNR_MEAN"] = str(snr_and_noise['snr_mean'])
+    hdr["SNR_MED"] = str(snr_and_noise['snr_median'])
+    hdr["NOISE"] = str(snr_and_noise['noise'])
 
     hdr["ORIGINAL"] = infile_base
 
@@ -547,7 +501,7 @@ def process_single_spec(triplet, common_vals, processed_folder = "processed_spec
 
     out_path = output_dir / f"{base_name}_noisy_deZ_rebinned.fits"
     if out_path.exists():
-        return {"name": base_name, "status": "exists", "reason": "", "z": redshift}
+        return base_name
 
     try:
         
@@ -580,7 +534,10 @@ def process_single_spec(triplet, common_vals, processed_folder = "processed_spec
         # crop spectrum to common wavelength region
         final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
 
+        # check for fully masked spectra
         mask = final_spec_flux == 0 # mask only of CROPPED spectrum
+        if mask.all():
+            print(f"fully masked spec: {base_name}")
 
         # get normalization factors (saved and stored in fits spectrum )
         
@@ -593,11 +550,18 @@ def process_single_spec(triplet, common_vals, processed_folder = "processed_spec
         snr_mean = noise_info['snr_mean']
         snr_median = noise_info['snr_median']
 
-        # full-spectrum median (NaN if every pixel is masked)
-        full_spec_median = np.median(final_spec_flux[~mask]) if (~mask).any() else np.nan
-
-        # record problems instead of printing them (written to the logs by main)
-        flags = quality_flags(final_spec_flux, noise_info, full_spec_median)
+        # if no continuum flux measurement OR
+        # if noise and snr are 0, spec is invalid
+        # MEAN
+        if (noise == 0.0 and snr_mean == 0.0) or (cont_mean == 0.0 or np.isnan(cont_mean) or cont_mean is None):
+            print(f"invalid spec {base_name} with ({cont_mean}, {noise}, {snr_mean})")
+        # MEDIAN
+        if (noise == 0.0 and snr_median == 0.0) or (cont_median == 0.0 or np.isnan(cont_median) or cont_median is None):
+            print(f"invalid spec {base_name} with ({cont_median}, {noise}, {snr_median})")
+        # I guess keep, but not sure im using it..
+        full_spec_median = np.median(final_spec_flux[~mask])
+        if  (full_spec_median == 0.0 or np.isnan(full_spec_median) or full_spec_median is None):
+            print(f"invalid spec {base_name} with {full_spec_median}")
         
         norm_factors = {'continuum_mean' : cont_mean,
                         'continuum_median' : cont_median,
@@ -614,17 +578,20 @@ def process_single_spec(triplet, common_vals, processed_folder = "processed_spec
         idx = _IDS.get(id)
         ref_cat_row = {c: _COLS[c][idx] for c in _COLS} if idx is not None else {}
         if idx is None:
-            flags.append(f"ID {id} not in reference catalogue (saved without parameters)")
+            print(f"ID {id} not found in reference catalogue")
 
         save_spec(final_spec_flux, final_spec_l, redshift, snr_and_noise, norm_factors, ref_cat_row, base_name, output_dir,)
 
-        return {"name": base_name, "status": "flagged" if flags else "processed",
-                "reason": "; ".join(flags), "z": redshift}
+        return base_name  # Useful for tracking progress
     
     except Exception as e:
-        # record the failure and let the rest of the job continue
-        return {"name": base_name, "status": "failed",
-                "reason": f"{type(e).__name__}: {e}", "z": redshift}
+        print(
+            f"\nERROR: Worker failed on file: {base_name}", file=sys.stderr, flush=True
+        )
+        print(f"Error details: {e}")
+        # Re-raise the error if you want the whole job to stop,
+        # or return None if you want the job to keep going for other files
+        raise e
 
 def parse_agn_filename(base_name):
     """
@@ -662,7 +629,7 @@ def process_single_agn_spec(triplet, common_vals, processed_folder = "processed_
 
     out_path = output_dir / f"{base_name}_noisy_deZ_rebinned.fits"
     if out_path.exists():
-        return {"name": base_name, "status": "exists", "reason": "", "z": redshift}
+        return base_name
 
     try:
         
@@ -695,7 +662,10 @@ def process_single_agn_spec(triplet, common_vals, processed_folder = "processed_
         # crop spectrum to common wavelength region
         final_spec_flux, final_spec_l = crop_spectrum(spec_flux, spec_l, common_vals)
 
+        # check for fully masked spectra
         mask = final_spec_flux == 0 # mask only of CROPPED spectrum
+        if mask.all():
+            print(f"fully masked spec: {base_name}")
 
         # get normalization factors (saved and stored in fits spectrum )
         
@@ -708,11 +678,18 @@ def process_single_agn_spec(triplet, common_vals, processed_folder = "processed_
         snr_mean = noise_info['snr_mean']
         snr_median = noise_info['snr_median']
 
-        # full-spectrum median (NaN if every pixel is masked)
-        full_spec_median = np.median(final_spec_flux[~mask]) if (~mask).any() else np.nan
-
-        # record problems instead of printing them (written to the logs by main)
-        flags = quality_flags(final_spec_flux, noise_info, full_spec_median)
+        # if no continuum flux measurement OR
+        # if noise and snr are 0, spec is invalid
+        # MEAN
+        if (noise == 0.0 and snr_mean == 0.0) or (cont_mean == 0.0 or np.isnan(cont_mean) or cont_mean is None):
+            print(f"invalid spec {base_name} with ({cont_mean}, {noise}, {snr_mean})")
+        # MEDIAN
+        if (noise == 0.0 and snr_median == 0.0) or (cont_median == 0.0 or np.isnan(cont_median) or cont_median is None):
+            print(f"invalid spec {base_name} with ({cont_median}, {noise}, {snr_median})")
+        # I guess keep, but not sure im using it..
+        full_spec_median = np.median(final_spec_flux[~mask])
+        if  (full_spec_median == 0.0 or np.isnan(full_spec_median) or full_spec_median is None):
+            print(f"invalid spec {base_name} with {full_spec_median}")
         
         norm_factors = {'continuum_mean' : cont_mean,
                         'continuum_median' : cont_median,
@@ -733,13 +710,16 @@ def process_single_agn_spec(triplet, common_vals, processed_folder = "processed_
 
         save_spec(final_spec_flux, final_spec_l, redshift, snr_and_noise, norm_factors, ref_cat_row, base_name, output_dir,)
 
-        return {"name": base_name, "status": "flagged" if flags else "processed",
-                "reason": "; ".join(flags), "z": redshift}
+        return base_name  # Useful for tracking progress
 
     except Exception as e:
-        # record the failure and let the rest of the job continue
-        return {"name": base_name, "status": "failed",
-                "reason": f"{type(e).__name__}: {e}", "z": redshift}
+        print(
+            f"\nERROR: Worker failed on file: {base_name}", file=sys.stderr, flush=True
+        )
+        print(f"Error details: {e}")
+        # Re-raise the error if you want the whole job to stop,
+        # or return None if you want the job to keep going for other files
+        raise e
     
 _IDS = None
 _COLS = None
@@ -789,44 +769,36 @@ def main():
         print(f"Starting parallel processing on {cpus} cores...")
     else:
         print("running on non-cluster")
-        cpus = max(1, multiprocessing.cpu_count() - 1)  # leave one core for the OS (but at least 1)
+        cpus = multiprocessing.cpu_count() - 1  # Leave one core for the OS
         print(f"Starting parallel processing on {cpus} cores...")
 
-    GRID_SIZE = 4.0       # Angstroms, for rebinning
+    triplet_generator = get_valid_agn_triplets("agn_spectra")
+    # triplet_generator = get_valid_triplets("spectra")
 
-    # modes to run, in order. From the command line, e.g.
-    #   python process_spectra.py            -> galaxy, then agn
-    #   python process_spectra.py agn        -> agn only
-    modes = sys.argv[1:] or ["galaxy", "agn"]
-    for mode in modes:
-        if mode not in ("galaxy", "agn"):
-            raise ValueError(f"mode must be 'galaxy' or 'agn', not {mode!r}")
+    GRID_SIZE = 4.0  # Angstroms, for rebinning
 
-    for mode in modes:
-        print(f"\n===== {mode} =====")
+    # notes for me: partial returns new function with some of the arguments 'frozen'/ already set for passing to executor
+    # frozen args are the ones that every worker will use and will have the same.
 
-        # every skipped / failed / flagged spectrum is recorded here, then written to CSV
-        log = []
+    # worker_function = partial(process_single_spec, common_vals = common_vals, grid_size = GRID_SIZE, de_z = Z_TARGET)
+    worker_function = partial(process_single_agn_spec, common_vals = common_vals, processed_folder = "processed_agn_spectra", grid_size = GRID_SIZE, de_z = Z_TARGET)
 
-        # notes for me: partial returns new function with some of the arguments 'frozen'/ already set for passing to executor
-        # frozen args are the ones that every worker will use and will have the same.
-        if mode == "galaxy":
-            triplet_generator = get_valid_triplets("spectra", log)
-            worker_function = partial(process_single_spec, common_vals = common_vals, grid_size = GRID_SIZE, de_z = Z_TARGET)
-        else:
-            triplet_generator = get_valid_agn_triplets("agn_spectra", log)
-            worker_function = partial(process_single_agn_spec, common_vals = common_vals, processed_folder = "processed_agn_spectra", grid_size = GRID_SIZE, de_z = Z_TARGET)
 
-        # notes for me: execute extra processes. each extra process is a separate worker.
-        # each separate worker is a separate python process, so they don't share memory.
-        # executor manages the poool of workers- queues and hands out tasks.
-        # the generators run in THIS process, so they can append to `log` safely;
-        # workers run in separate processes, so they RETURN their record instead.
-        with concurrent.futures.ProcessPoolExecutor(max_workers=cpus, initializer=initialize_worker, initargs=(REF_CATALOGUE, 'TARGET_ID', DATA_COLS)) as executor:
-            for record in executor.map(worker_function, triplet_generator):
-                log.append(record)
+    # notes for me: execute extra processes. each extra process is a separate worker.
+    # each separate worker is a separate python process, so they don't share memory.
+    # executor manages the poool of workers- queues and hands out tasks.
+    # worker chills until given task be executor then sends reuslts back and waits for next task
+    with concurrent.futures.ProcessPoolExecutor(max_workers=cpus, initializer=initialize_worker, initargs=(REF_CATALOGUE, 'TARGET_ID', DATA_COLS)) as executor:
+        # executor.map applies the function to every item in the iterable (triplet_generator)
+        # and returns an iterator of results
+        # results come back in input order, not completion order. results are held back if the
+        # first task takes longer than the second, for example.
+        results = executor.map(worker_function, triplet_generator)
 
-        write_logs(log, prefix=mode)
+        for finished_base_name in results:
+            if finished_base_name:
+                print(f"Finished processing: {finished_base_name}")
+                pass
 
     #####################################################################################################################
 

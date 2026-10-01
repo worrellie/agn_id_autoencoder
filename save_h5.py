@@ -1,7 +1,9 @@
 
 RND = 42
+import argparse
 import os
 import glob
+import sys
 import numpy as np
 from astropy.io import fits
 from matplotlib import pyplot as plt
@@ -732,74 +734,157 @@ def check_agn_h5_samples(h5_path, norm):
         # plt.show()
         plt.savefig("eg_samples_agn.pdf")
 
-######################################################################################
-####################################### MAIN #########################################
-######################################################################################
-def main():
+def build(mode, processed_dir, h5_filename):
+    """Split the processed FITS files in processed_dir and write h5_filename."""
+    print(f"\n===== {mode}: {processed_dir} -> {h5_filename} =====")
 
-    ##### AGN #####
-
-    output_dir = "processed_agn_spectra"
-    h5_filename = "all_agn_float32.h5"
-    result = sklearn_split_agn(
-        output_dir, h5_filename
-    )
-    if result is None:
-        print("No files found. Exiting.")
-        return
-    files, valid_files, test_files = result
-
-    reference_fits = files[0]  # reference fits for parameter keys
-
-    save_h5_agn(reference_fits, h5_filename, files, valid_files, test_files)
+    if mode == "galaxy":
+        result = sklearn_split_data(processed_dir, h5_filename)
+        if result is None:
+            print(f"No files found in {processed_dir}. Skipping {mode}.")
+            return
+        files, train_files, valid_files, test_files = result
+        save_h5(files[0], h5_filename, files, train_files, valid_files, test_files)
+    else:
+        result = sklearn_split_agn(processed_dir, h5_filename)
+        if result is None:
+            print(f"No files found in {processed_dir}. Skipping {mode}.")
+            return
+        files, valid_files, test_files = result
+        save_h5_agn(files[0], h5_filename, files, valid_files, test_files)
 
     # check h5
     with h5py.File(h5_filename, "r") as hf:
-        print(f"\n📑 Root Attributes:")
+        print("\n📑 Root Attributes:")
         for attr in hf.attrs:
             print(f"  - {attr}: {hf.attrs[attr]}")
-
         print("\n🌳 File Structure:")
         hf.visititems(check_h5_structure)
     print("\n---------------------------------------------\n")
 
-    # check_h5_samples(h5_filename, norm = False)
-    check_agn_h5_samples(h5_filename, norm=True)
+    if mode == "galaxy":
+        check_h5_samples(h5_filename, norm=True)
+    else:
+        check_agn_h5_samples(h5_filename, norm=True)
+
+######################################################################################
+####################################### MAIN #########################################
+######################################################################################
 
 
+def main():
+    parser = argparse.ArgumentParser(
+        description="Build HDF5 files from processed spectra. Galaxy runs before AGN.",
+        epilog="example: python save_h5.py --galaxy processed_spectra all_spectra_float32_v4.h5 "
+               "--agn processed_agn_spectra all_agn_float32_v4.h5")
+    parser.add_argument("--galaxy", nargs=2, metavar=("PROCESSED_DIR", "OUT_H5"),
+                        help="build the normal-galaxy file")
+    parser.add_argument("--agn", nargs=2, metavar=("PROCESSED_DIR", "OUT_H5"),
+                        help="build the AGN file")
+    parser.add_argument("--overwrite", action="store_true",
+                        help="allow replacing an existing .h5 file")
+    args = parser.parse_args()
 
-    # ##### normal #####
+    jobs = [(mode, *getattr(args, mode)) for mode in ("galaxy", "agn") if getattr(args, mode)]
+    if not jobs:
+        parser.error("give at least one of --galaxy or --agn")
 
-    # output_dir = "processed_spectra"
-    # h5_filename = "all_spectra_float32.h5"
-    # result = sklearn_split_data(
-    #         output_dir, h5_filename
-    #     )
+    # check everything before starting, so a typo can't fail after a long first build
+    for mode, processed_dir, h5_filename in jobs:
+        if not os.path.isdir(processed_dir):
+            parser.error(f"--{mode}: processed directory '{processed_dir}' does not exist")
+        if not h5_filename.endswith(".h5"):
+            parser.error(f"--{mode}: output '{h5_filename}' should end in .h5")
+        if os.path.exists(h5_filename) and not args.overwrite:
+            parser.error(f"--{mode}: '{h5_filename}' already exists (use --overwrite to replace it)")
+    if len({h5 for _, _, h5 in jobs}) < len(jobs):
+        parser.error("galaxy and AGN outputs must have different file names")
 
-    # if result is None:
-    #     print("No files found. Exiting.")
-    #     return
-    # files, train_files, valid_files, test_files = result
-    # # print(train_files)
-    # # print(valid_files)
-    # # print(test_files)
+    for mode, processed_dir, h5_filename in jobs:
+        build(mode, processed_dir, h5_filename)
 
-    # reference_fits = files[0]  # reference fits for parameter keys
-
-    # save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_files)
-
-    # # check h5
-    # with h5py.File(h5_filename, "r") as hf:
-    #     print(f"\n📑 Root Attributes:")
-    #     for attr in hf.attrs:
-    #         print(f"  - {attr}: {hf.attrs[attr]}")
-
-    #     print("\n🌳 File Structure:")
-    #     hf.visititems(check_h5_structure)
-    # print("\n---------------------------------------------\n")
-
-    # # check_h5_samples(h5_filename, norm = False)
-    # check_h5_samples(h5_filename, norm=True)
 
 if __name__ == "__main__":
     main()
+
+
+
+
+# def main():
+
+#     ##### AGN #####
+
+#     output_dir = "processed_agn_spectra"
+#     h5_filename = "all_agn_float32.h5"
+#     result = sklearn_split_agn(
+#         output_dir, h5_filename
+#     )
+#     if result is None:
+#         print("No files found. Exiting.")
+#         return
+#     files, valid_files, test_files = result
+
+#     reference_fits = files[0]  # reference fits for parameter keys
+
+#     save_h5_agn(reference_fits, h5_filename, files, valid_files, test_files)
+
+#     # check h5
+#     with h5py.File(h5_filename, "r") as hf:
+#         print(f"\n📑 Root Attributes:")
+#         for attr in hf.attrs:
+#             print(f"  - {attr}: {hf.attrs[attr]}")
+
+#         print("\n🌳 File Structure:")
+#         hf.visititems(check_h5_structure)
+#     print("\n---------------------------------------------\n")
+
+#     # check_h5_samples(h5_filename, norm = False)
+#     check_agn_h5_samples(h5_filename, norm=True)
+
+
+
+#     # ##### normal #####
+
+#     # output_dir = "processed_spectra"
+#     # h5_filename = "all_spectra_float32.h5"
+#     # result = sklearn_split_data(
+#     #         output_dir, h5_filename
+#     #     )
+
+#     # if result is None:
+#     #     print("No files found. Exiting.")
+#     #     return
+#     # files, train_files, valid_files, test_files = result
+#     # # print(train_files)
+#     # # print(valid_files)
+#     # # print(test_files)
+
+#     # reference_fits = files[0]  # reference fits for parameter keys
+
+#     # save_h5(reference_fits, h5_filename, files, train_files, valid_files, test_files)
+
+#     # # check h5
+#     # with h5py.File(h5_filename, "r") as hf:
+#     #     print(f"\n📑 Root Attributes:")
+#     #     for attr in hf.attrs:
+#     #         print(f"  - {attr}: {hf.attrs[attr]}")
+
+#     #     print("\n🌳 File Structure:")
+#     #     hf.visititems(check_h5_structure)
+#     # print("\n---------------------------------------------\n")
+
+#     # # check_h5_samples(h5_filename, norm = False)
+#     # check_h5_samples(h5_filename, norm=True)
+
+#     modes = sys.argv[1:] or ["galaxy", "agn"]
+#     for mode in modes:
+#         if mode not in ("galaxy", "agn"):
+#             raise ValueError(f"Invalid mode '{mode}'. Choose 'galaxy' or 'agn'.")
+
+#     for mode in modes:
+#         print(f"\n===== {mode} =====")
+
+#         if mode == "galaxy":
+
+# if __name__ == "__main__":
+#     main()

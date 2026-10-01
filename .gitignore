@@ -57,3 +57,6 @@ wandb*
 
 agn_spectra/
 AGN_temp_*
+
+*.pdf
+*.csv
