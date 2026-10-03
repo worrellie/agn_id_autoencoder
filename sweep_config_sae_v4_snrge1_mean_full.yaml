@@ -1,0 +1,45 @@
+# Full Bayesian sweep: standard autoencoder, v4 data with SNR_MEAN >= 1 cut, mean-normalised
+# log-scaled flux.
+program: run_ae.py
+method: bayes
+metric:
+  name: final/best_valid_log_mse
+  goal: minimize
+early_terminate:
+  type: hyperband
+  min_iter: 100           # first check at step 100 of the logged metric
+  eta: 2                  # keep top half at each bracket
+run_cap: 50
+
+command:
+  - ${env}
+  - python
+  - ${program}
+  - -f
+  - all_spectra_float32_v4_SNR_MEAN_ge1.h5
+  - -ft
+  - log_scale_flux        # mean normalisation (median is log_scale_flux_med)
+  - -p
+  - sae_v4_snrge1_mean_full   # separate project from the uncut sweep
+  - -n
+  - --sae
+  - -a
+  - all_agn_float32_v4_z09-17_SNR_MEAN_ge1.h5
+
+parameters:
+  epochs:
+    value: 300
+  latent_size:
+    values: [2, 16, 32, 64, 128, 256]
+  learn_rate:
+    distribution: log_uniform_values
+    min: 1.0e-6
+    max: 1.0e-3
+  weight_decay:
+    distribution: log_uniform_values
+    min: 1.0e-8
+    max: 1.0e-4
+  n_layers:
+    values: [1, 2, 3]
+  activation:
+    values: [LeakyReLU, ReLU, Tanh]

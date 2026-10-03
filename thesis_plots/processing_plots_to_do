@@ -1,0 +1,19 @@
+Plots, in rough order of importance
+
+One spectrum at each processing stage. A four-panel figure for a single galaxy: raw flux, continuum-normalised, log-scaled, then standardised, with the gap pixels shaded. This is the central methods figure, because it shows the reader exactly what the model receives.
+
+Example spectra at low, typical and high SNR, for both galaxies and AGN. It shows directly that a typical galaxy spectrum (SNR ≈ 0.25) is mostly noise, which sets up your SNR discussion.
+
+The distribution of pixel values at each stage, as histograms. This justifies the log transform: the normalised flux has extreme tails that the log version doesn't.
+
+The rest-frame wavelength range covered at each redshift, with the main emission lines marked: Hα, Hβ, [O III] and [O II]. It shows which features fall in the observed window at each redshift, and so explains why AGN above z = 1.8 look different to the model for reasons unrelated to being AGN.
+
+The fraction of masked pixels at each wavelength, for galaxies and AGN. It shows where the gaps are, and it will help explain why 22.8% of AGN pixels are masked against 9.5% for galaxies.
+
+Galaxy property distributions in the train, validation and test splits, overlaid: redshift, stellar mass, sSFR, dust and H magnitude. This shows the three splits are drawn from the same population.
+
+Galaxies against AGN: SNR, redshift and continuum level (NORM_CMN) overlaid. This is the key figure for your SNR explanation, since it shows the AGN are about 7.5 times brighter at the same noise level.
+
+Mean against median normalisation: the two normalisers plotted against each other, and the two log-scaled flux distributions. It supports the comparison between normalisations, and shows the very small NORM_CMN values that stretch the tails of the mean-normalised flux.
+
+Median spectra: galaxies against AGN, and galaxies in redshift bins. They show the average shape the model will learn.

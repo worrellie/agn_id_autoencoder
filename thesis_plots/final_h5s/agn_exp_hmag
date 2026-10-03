@@ -1,0 +1,4 @@
+split             N  no exp   exposure counts
+validation     2388       0   2h: 1192, 8h: 1196
+test            600       0   2h: 300, 8h: 300
+

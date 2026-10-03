@@ -1,0 +1,5 @@
+split             N  no exp  HMAG NaN  HMAG -99   HMAG range (valid)   exposure counts
+train         82015       0         0         3        17.16 – 28.97   2h: 73092, 8h: 8923
+validation    10259       0         0         0        15.81 – 27.14   2h: 9143, 8h: 1116
+test          10248       0         0         2        18.61 – 27.51   2h: 9132, 8h: 1116
+

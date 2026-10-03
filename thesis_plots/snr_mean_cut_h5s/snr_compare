@@ -1,0 +1,106 @@
+ uv run python3 compare_snr_splits.py thesis_plots/snr_mean_cut_h5s/all_agn_float32_v4_z09-17_SNR_MEAN_ge1.h5 thesis_plots/snr_mean_cut_h5s/all_spectra_float32_v4_SNR_MEAN_ge1.h5 --labels AGN Normal
+
+=== SNR_MED ===
+split      file                N     mean   median       p5      p16      p84      p95    n≤0
+train      Normal           9891      2.5     1.81     1.04     1.16        4     6.23      0
+           (only in Normal, not compared)
+validation AGN              1787     8.59     7.17     1.35     2.21     14.5     22.3      0
+validation Normal           1207     2.53      1.8     1.04     1.14     3.99     6.36      0
+           KS D=0.5465  p=3.01e-198
+           no obj_id overlap (different sources)
+test       AGN               440      8.3     7.12     1.28     2.06       14       19      0
+test       Normal           1243      2.5     1.75     1.03     1.17     3.92     6.15      0
+           KS D=0.5351  p=3.74e-86
+           no obj_id overlap (different sources)
+
+=== SNR_MEAN ===
+split      file                N     mean   median       p5      p16      p84      p95    n≤0
+train      Normal           9891      2.5     1.81     1.04     1.16     3.98      6.2      0
+           (only in Normal, not compared)
+validation AGN              1787      8.6     7.23     1.35      2.2     14.5     22.3      0
+validation Normal           1207     2.52      1.8     1.04     1.14     3.99     6.36      0
+           KS D=0.5487  p=6.11e-200
+           no obj_id overlap (different sources)
+test       AGN               440     8.31     7.24      1.3     2.06     14.1     19.2      0
+test       Normal           1243     2.49     1.74     1.04     1.17     3.91     6.06      0
+           KS D=0.5384  p=2.97e-87
+           no obj_id overlap (different sources)
+
+Saved /home/worrellie/Documents/agn_id_autoencoder/thesis_plots/snr_mean_cut_h5s/snr_comparison.png
+
+Saved /home/worrellie/Documents/agn_id_autoencoder/thesis_plots/snr_mean_cut_h5s/snr_comparison_linear.png
+
+=== NOISE ===
+split      file                N     mean   median       p5      p16      p84      p95    n≤0
+train      Normal           9891 1.02e-18 9.04e-19  5.8e-19 6.45e-19  1.4e-18 1.65e-18      0
+           (only in Normal, not compared)
+validation AGN              1787 3.05e-18  1.5e-18 6.16e-19 7.61e-19 4.29e-18 1.13e-17      0
+validation Normal           1207 1.01e-18 8.86e-19 5.83e-19 6.41e-19 1.38e-18 1.63e-18      0
+           KS D=0.4358  p=1.64e-123
+           no obj_id overlap (different sources)
+test       AGN               440 3.41e-18  1.5e-18 6.42e-19 7.53e-19 4.38e-18 1.58e-17      0
+test       Normal           1243 1.03e-18 9.12e-19 5.79e-19 6.51e-19 1.42e-18 1.65e-18      0
+           KS D=0.4205  p=3.66e-52
+           no obj_id overlap (different sources)
+
+=== NORM_CMN ===
+split      file                N     mean   median       p5      p16      p84      p95    n≤0
+train      Normal           9891 2.25e-18 1.92e-18 9.17e-19 1.27e-18  3.2e-18  4.6e-18      0
+           (only in Normal, not compared)
+validation AGN              1787  3.2e-17 1.04e-17 1.22e-18 2.37e-18 6.07e-17 1.35e-16      0
+validation Normal           1207 2.25e-18 1.87e-18 9.22e-19 1.25e-18 3.21e-18 4.76e-18      0
+           KS D=0.6367  p=2.73e-275
+           no obj_id overlap (different sources)
+test       AGN               440 3.51e-17 1.03e-17 1.23e-18 2.18e-18  5.6e-17 1.68e-16      0
+test       Normal           1243 2.24e-18  1.9e-18  9.4e-19 1.27e-18 3.14e-18 4.46e-18      0
+           KS D=0.6265  p=7.02e-121
+           no obj_id overlap (different sources)
+
+=== NORM_CMD ===
+split      file                N     mean   median       p5      p16      p84      p95    n≤0
+train      Normal           9891 2.25e-18 1.91e-18  9.2e-19 1.27e-18 3.21e-18 4.61e-18      0
+           (only in Normal, not compared)
+validation AGN              1787 3.17e-17 1.04e-17 1.23e-18  2.4e-18 6.07e-17 1.31e-16      0
+validation Normal           1207 2.25e-18 1.87e-18 9.16e-19 1.25e-18 3.21e-18 4.76e-18      0
+           KS D=0.6356  p=3.1e-274
+           no obj_id overlap (different sources)
+test       AGN               440 3.48e-17 1.03e-17 1.25e-18 2.18e-18 5.52e-17 1.66e-16      0
+test       Normal           1243 2.25e-18 1.89e-18 9.46e-19 1.28e-18 3.15e-18 4.48e-18      0
+           KS D=0.6297  p=3.05e-122
+           no obj_id overlap (different sources)
+
+=== NORM_MED ===
+split      file                N     mean   median       p5      p16      p84      p95    n≤0
+train      Normal           9891 1.16e-18 9.95e-19 4.51e-19 6.48e-19 1.65e-18 2.35e-18      0
+           (only in Normal, not compared)
+validation AGN              1787 2.04e-17 6.06e-18 7.19e-19 1.33e-18 3.58e-17 9.24e-17      0
+validation Normal           1207 1.16e-18  9.7e-19  4.5e-19 6.38e-19 1.65e-18  2.4e-18      0
+           KS D=0.6668  p=9.95e-305
+           no obj_id overlap (different sources)
+test       AGN               440 2.23e-17 6.12e-18 6.57e-19 1.22e-18 3.54e-17 9.49e-17      0
+test       Normal           1243 1.15e-18 9.75e-19  4.7e-19 6.51e-19 1.62e-18 2.31e-18      0
+           KS D=0.6507  p=2.35e-131
+           no obj_id overlap (different sources)
+
+Saved /home/worrellie/Documents/agn_id_autoencoder/thesis_plots/snr_mean_cut_h5s/noise_norm_comparison.png
+
+--- SNR_MED: sources above SNR threshold, count (% of file's split) ---
+split      file                N             > 0             > 1             > 3             > 5            > 10
+train      Normal           9891    9891 (100.0%)    9775 (98.8%)    2531 (25.6%)     954 ( 9.6%)      70 ( 0.7%)
+validation AGN              1787    1787 (100.0%)    1787 (100.0%)    1376 (77.0%)    1141 (63.9%)     614 (34.4%)
+validation Normal           1207    1207 (100.0%)    1190 (98.6%)     315 (26.1%)     114 ( 9.4%)      11 ( 0.9%)
+test       AGN               440     440 (100.0%)     440 (100.0%)     329 (74.8%)     277 (63.0%)     160 (36.4%)
+test       Normal           1243    1243 (100.0%)    1228 (98.8%)     306 (24.6%)     122 ( 9.8%)      13 ( 1.0%)
+ALL        AGN              2227    2227 (100.0%)    2227 (100.0%)    1705 (76.6%)    1418 (63.7%)     774 (34.8%)
+ALL        Normal          12341   12341 (100.0%)   12193 (98.8%)    3152 (25.5%)    1190 ( 9.6%)      94 ( 0.8%)
+
+--- SNR_MEAN: sources above SNR threshold, count (% of file's split) ---
+split      file                N             > 0             > 1             > 3             > 5            > 10
+train      Normal           9891    9891 (100.0%)    9891 (100.0%)    2522 (25.5%)     944 ( 9.5%)      70 ( 0.7%)
+validation AGN              1787    1787 (100.0%)    1787 (100.0%)    1375 (76.9%)    1143 (64.0%)     609 (34.1%)
+validation Normal           1207    1207 (100.0%)    1207 (100.0%)     312 (25.8%)     113 ( 9.4%)      11 ( 0.9%)
+test       AGN               440     440 (100.0%)     440 (100.0%)     328 (74.5%)     278 (63.2%)     159 (36.1%)
+test       Normal           1243    1243 (100.0%)    1243 (100.0%)     307 (24.7%)     118 ( 9.5%)      13 ( 1.0%)
+ALL        AGN              2227    2227 (100.0%)    2227 (100.0%)    1703 (76.5%)    1421 (63.8%)     768 (34.5%)
+ALL        Normal          12341   12341 (100.0%)   12341 (100.0%)    3141 (25.5%)    1175 ( 9.5%)      94 ( 0.8%)
+

@@ -1,0 +1,17 @@
+Problems found, and what they explain
+
+1. The common window was calculated for 0.9 ≤ z ≤ 1.7, but your data goes higher. Galaxies reach z = 1.8 and AGN reach z = 2.5. 
+
+2. The continuum window leaves the observed range for high-redshift AGN. The window covers 5100–5800 Å rest-frame, which is 5100(1+z) to 5800(1+z) observed. Above z ≈ 2.1, part of it lies beyond ~18,000 Å. 
+
+3. NOISE isn't only noise. It's the scatter of the flux in the continuum window, so any slope or features in the continuum add to it. For bright objects especially, it overestimates the noise, and the SNR values are underestimates of different sizes for different objects. Since extension 4 holds the noiseless template, observed flux minus template gives the actual noise in each pixel. That's a much stronger basis for SNR, and for a χ²-style loss.
+
+4. For AGN, the "continuum" window may contain emission lines. 
+
+5. NORM_MED is on a different flux scale from NORM_CMN and NORM_CMD. NORM_MED comes from the z = 0.9 flux, which was multiplied by (1+z)/1.9. 
+
+6. Unreadable AGN redshifts silently become 0.9. If the redshift can't be read from an AGN filename, the code quietly uses 0.9. Make this raise an error, or at least log a warning, and check whether any AGN were affected.
+
+7. Invalid spectra are reported but not removed. The filtering happens later, so the thesis should say where. It's also a place to resolve the earlier mismatch between 763 and 785 removed galaxy spectra.
+
+8. Reproducibility. main() is currently set to AGN mode, with the galaxy lines commented out. Record exactly which settings produced each dataset. RND = 42 isn't used in this script, so the random split must come from the HDF5-building script. A smaller point: deredshift_channel has de_z=0.8 as its default argument, although it's always called with 0.9. That's harmless but confusing to a reader.
